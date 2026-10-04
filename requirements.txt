@@ -1,7 +1,11 @@
-uagents==0.26.0
-fastapi
-uvicorn
-httpx
-python-dotenv
-openai
 certifi
+fastapi
+google-auth
+httpx
+openai
+pillow
+python-dotenv
+relaymessenger
+requests
+uagents==0.26.0
+uvicorn

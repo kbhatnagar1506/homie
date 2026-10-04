@@ -45,7 +45,8 @@ class RelayTeam:
         try:
             return json.loads(STATE.read_text())
         except (FileNotFoundError, json.JSONDecodeError):
-            return {"direct": {}, "team_chat": None, "hello": []}
+            # On a fresh server, reuse the chats created on the first run instead of texting hello again.
+            return json.loads(env("RELAY_STATE_JSON") or '{"direct": {}, "team_chat": null, "hello": []}')
 
     def _save(self) -> None:
         STATE.write_text(json.dumps(self.state, indent=2))

@@ -1,0 +1,10 @@
+.venv
+.git
+.env
+.env.*
+data/state.json
+data/memory.json
+data/relay_state.json
+agent*_data.json
+__pycache__
+*.log
