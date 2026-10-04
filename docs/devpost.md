@@ -86,6 +86,8 @@ Even on a Sunday, when every office is closed, Homie still decides: it ranks the
 
 ## 🏗 Architecture
 
+![Homie system architecture](https://raw.githubusercontent.com/kbhatnagar1506/homie/main/docs/homie_system_architecture.png)
+
 ![Homie architecture](https://raw.githubusercontent.com/kbhatnagar1506/homie/main/docs/homie_architecture.png)
 
 ```

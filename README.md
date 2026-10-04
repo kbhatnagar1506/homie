@@ -55,7 +55,9 @@ Text it once, on **ASI:One** or **Relay**:
 
 **After you move in:** say *"my ice maker is broken"* and **video-call Fix on Relay**. A Pixar-style figurine looks through your camera, sees the problem, files the ticket with a photo, and chases the office until it's booked.
 
-<p align="center"><img src="docs/homie_architecture.png" width="900" alt="Homie architecture" /></p>
+<p align="center"><img src="docs/homie_system_architecture.png" width="960" alt="Homie system architecture" /></p>
+
+<p align="center"><img src="docs/homie_architecture.png" width="900" alt="Homie agent flow" /></p>
 
 ---
 
