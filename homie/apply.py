@@ -37,9 +37,9 @@ def available() -> bool:
     return bool(env("BROWSER_USE_API_KEY"))
 
 
-async def start(building: dict, url: str, move_in: str, beds: int | None, first: str, last: str, email: str) -> dict:
+async def start(building: dict, url: str, move_in: str, beds: int | None, first: str, last: str, email: str, task: str = "") -> dict:
     """Start the run and a public live view, with the renter's own details. Returns {"share_url", "run_id"} or {"error"}."""
-    task = TASK.format(name=building["name"], url=url, first=first, last=last or "-", email=email,
+    task = task or TASK.format(name=building["name"], url=url, first=first, last=last or "-", email=email,
                        move_in=move_in or "August 20", beds=1 if beds is None else beds)
     headers = {"X-Browser-Use-API-Key": env("BROWSER_USE_API_KEY")}
     async with httpx.AsyncClient(timeout=30) as client:

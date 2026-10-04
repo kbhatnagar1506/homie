@@ -127,6 +127,19 @@ async def swipe(deck_id: str, body: dict):
     return {"ok": True, "done": len(deck["swipes"]) >= len(deck["cards"])}
 
 
+@app.get("/portal")
+def portal():
+    return FileResponse(STATIC / "portal.html")
+
+
+@app.post("/api/portal/created")
+async def portal_created(body: dict):
+    state["apply"] = {**state.get("apply", {}), "status": "account created ✅ (sandbox portal)"}
+    log(f"✅ Sandbox portal: account created for {body.get('first')} at {body.get('building')}")
+    await publish()
+    return {"ok": True}
+
+
 @app.get("/flow")
 def flow():
     return FileResponse(STATIC / "flow.html")

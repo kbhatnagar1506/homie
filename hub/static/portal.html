@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Resident Portal · Homie Sandbox</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg: #f4f6f9; --card: #fff; --ink: #1d2433; --dim: #667085; --line: #e3e7ee; --brand: #2f6fed; --ok: #12a150; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
+  .top { background: #fff; border-bottom: 1px solid var(--line); padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  .top img { width: 30px; height: 30px; border-radius: 8px; }
+  .top b { font-size: 15px; } .top span { color: var(--dim); font-size: 13px; }
+  .top .sand { margin-left: auto; font-size: 11.5px; color: #8a5a00; background: #fff4d6; border: 1px solid #f1d38b; padding: 4px 10px; border-radius: 99px; }
+  main { max-width: 520px; margin: 40px auto; padding: 0 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 28px; box-shadow: 0 6px 24px rgba(16,24,40,.06); }
+  h1 { font-size: 22px; margin: 0 0 4px; } .sub { color: var(--dim); font-size: 14px; margin: 0 0 22px; }
+  .row { display: flex; gap: 12px; } .row > div { flex: 1; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  input[type=text], input[type=email], input[type=tel], input[type=password] { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; font: inherit; font-size: 14px; }
+  input:focus { outline: 2px solid rgba(47,111,237,.25); border-color: var(--brand); }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin-top: 18px; font-size: 13px; color: var(--dim); }
+  button { margin-top: 22px; width: 100%; padding: 13px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }
+  .err { color: #c0362c; font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .done { text-align: center; padding: 20px 0; } .done .big { font-size: 54px; } .done h1 { color: var(--ok); }
+  .foot { text-align: center; color: var(--dim); font-size: 12px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="top"><img src="/avatars/papers.png" alt="" /><b>Resident Portal</b><span id="bname"></span><span class="sand">Homie sandbox · nothing is saved</span></div>
+<main>
+  <div class="card" id="form">
+    <h1>Create an account to begin</h1>
+    <p class="sub">Start your application for <b id="bname2"></b>.</p>
+    <form id="f" autocomplete="off">
+      <div class="row"><div><label for="first">Legal first name</label><input id="first" name="first" type="text" required /></div>
+        <div><label for="last">Last name</label><input id="last" name="last" type="text" required /></div></div>
+      <label for="email">Email</label><input id="email" name="email" type="email" required />
+      <label for="phone">Phone</label><input id="phone" name="phone" type="tel" required />
+      <div class="row"><div><label for="pw">Password</label><input id="pw" name="pw" type="password" required minlength="8" /></div>
+        <div><label for="pw2">Confirm password</label><input id="pw2" name="pw2" type="password" required /></div></div>
+      <label class="check"><input type="checkbox" id="terms" required /> I agree to the Terms &amp; Conditions and Privacy Policy.</label>
+      <button type="submit">Create Account</button>
+      <div class="err" id="err"></div>
+    </form>
+  </div>
+  <div class="card done" id="done" hidden>
+    <div class="big">✅</div><h1>Account created</h1>
+    <p class="sub" id="welcome"></p>
+    <p class="sub">Next: choose your floor plan and move-in date.</p>
+  </div>
+  <div class="foot">Sandbox portal for demos. No account is created anywhere and nothing you type is stored.</div>
+</main>
+<script>
+const b = new URLSearchParams(location.search).get("b") || "your new apartment";
+document.getElementById("bname").textContent = "· " + b; document.getElementById("bname2").textContent = b;
+document.getElementById("f").onsubmit = e => {
+  e.preventDefault();
+  const v = id => document.getElementById(id).value;
+  if (v("pw") !== v("pw2")) { document.getElementById("err").textContent = "Passwords don't match."; return; }
+  document.getElementById("form").hidden = true; document.getElementById("done").hidden = false;
+  document.getElementById("welcome").textContent = `Welcome, ${v("first")}! Your ${b} portal is ready.`;
+  fetch("/api/portal/created", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ building: b, first: v("first") }) }).catch(() => {});
+};
+</script>
+</body>
+</html>
