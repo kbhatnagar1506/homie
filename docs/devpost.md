@@ -14,7 +14,7 @@
 | **Relay** | Text `@homie` (or message the Homie Team group) |
 | **Mission control** | https://homie-751583582765.us-central1.run.app |
 | **Hear every call live** | https://homie-751583582765.us-central1.run.app/flow |
-| **Demo video** | `[VIDEO LINK]` |
+| **Demo video** | https://youtu.be/zl_fpA4hX9Q |
 | **Code** | https://github.com/kbhatnagar1506/homie |
 
 ![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3) ![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
@@ -81,6 +81,32 @@ Here's what happened in our live end-to-end test on the deployed system, trigger
 Even on a Sunday, when every office is closed, Homie still decides: it ranks the buildings you liked on Scout's live website prices, picks a top pick, and Later calls them all the moment they open.
 
 **After you move in:** say *"my ice maker is broken"* and video-call **Fix**. A Pixar-style figurine looks through your camera ("I'm looking at it…"), describes what it sees with Gemini vision, files the maintenance request, and chases the office until it's booked.
+
+---
+
+## 🏁 How Homie meets the Fetch.ai judging criteria
+
+| Criterion | What Homie does |
+|---|---|
+| **Functionality & technical implementation (25%)** | 11 uAgents running live on Cloud Run. Request-id RPC keeps 10 calls and 6 website reads in flight at once. A real end-to-end run takes 185 seconds from one message to a held apartment. |
+| **Use of Fetch.ai technology (20%)** | Every agent registered on **Agentverse** with the Innovation Lab badge. Homie speaks the **Agent Chat Protocol** and is usable from **ASI:One** as `@homie-usa`. It also implements the **Payment Protocol**: a `RequestPayment` for the fee in FET, verified on-chain before `CompletePayment`. |
+| **Innovation & creativity (20%)** | An agent that *waits* for you (Later), a swipe deck built from scraped facts (Vibecheck), calls you can listen to live in stereo, and a figurine you can video-call that sees through your camera. |
+| **Real-world impact & usefulness (20%)** | It takes the exact five barriers international students hit (time zones, phone callbacks, no SSN, moving prices, US-only payments) and turns them into one message. |
+| **User experience & presentation (15%)** | The whole flow runs inside one ASI:One conversation: pick buildings by replying "1 3". Plus mission control, `/flow` with "Hear all calls", and Relay cards. |
+
+**Bonus points Homie covers:**
+- **Multi-agent collaboration:** 11 agents working together.
+- **Payment Protocol:** implemented for the Homie fee.
+- **Real-time data:** Google Places, live websites and live calls.
+- **Error handling:** retries, a cache fallback, a demo-call fallback, and confidence gates on every decision.
+- **Long-term viability:** Later's tasks survive restarts.
+
+## 💬 Why Relay
+
+Relay turns Homie from a bot into a **team you can text and call.**
+- **Seven agents are your contacts,** and the Homie Team group chat shows them working out loud.
+- **Every important moment is a one-tap card:** the swipe deck, Approve, "watch your application live".
+- **You can video-call any agent and point your camera at the problem.** That's something only a messenger built for agents makes feel natural.
 
 ---
 
