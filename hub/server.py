@@ -66,6 +66,16 @@ def log(text: str) -> None:
     state["log"] = state["log"][-60:]
 
 
+@app.on_event("startup")
+async def warm_google():
+    """Fetch the Google token at boot so the first camera analysis on a call isn't slow."""
+    import asyncio
+
+    from homie.llm import _client
+
+    await asyncio.to_thread(_client)
+
+
 @app.get("/")
 def dashboard():
     return FileResponse(STATIC / "dashboard.html")

@@ -116,7 +116,7 @@
 </header>
 <main>
   <section class="panel">
-    <h2>Agents <span class="count" id="agentcount">9 Fetch.ai agents · Jev orchestrating</span></h2>
+    <h2>Agents <span class="count" id="agentcount">9 Fetch.ai agents</span></h2>
     <svg id="net" viewBox="0 0 400 400"></svg>
     <div class="request"><div class="who" id="reqwho">Waiting for a request</div><div id="req">Text Homie on Relay or ask @homie-usa on ASI:One.</div></div>
     <div class="steps" id="steps"></div>
@@ -138,7 +138,7 @@
 </main>
 <script>
 const AGENTS = [
-  ["homie", "Homie", "homie"], ["jev", "Jev", "jev"], ["homie-caller", "Calls", "calls"], ["homie-negotiator", "Negotiator", "negotiator"],
+  ["homie", "Homie", "homie"], ["homie-caller", "Calls", "calls"], ["homie-negotiator", "Negotiator", "negotiator"],
   ["homie-paperwork", "Papers", "papers"], ["homie-repairs", "Fix", "fix"], ["homie-policy", "Policy", "policy"],
   ["homie-pictures", "Pics", "pics"], ["homie-memory", "Memory", "memory"], ["homie-later", "Later", "later"],
 ];
@@ -161,13 +161,12 @@ const svg = $("net"), NS = "http://www.w3.org/2000/svg", pos = {};
 (function drawNet() {
   const cx = 200, cy = 192, r = 132;
   pos["homie"] = [cx, cy + 18];
-  pos["jev"] = [cx, cy - 58];
-  const ring = AGENTS.filter(a => a[0] !== "homie" && a[0] !== "jev");
+  const ring = AGENTS.filter(a => a[0] !== "homie");
   ring.forEach(([id], i) => { const a = -Math.PI / 2 + (i + .5) * 2 * Math.PI / ring.length; pos[id] = [cx + r * Math.cos(a), cy + 18 + r * Math.sin(a)]; });
-  let html = `<line class="edge" id="e-jev" x1="${pos.homie[0]}" y1="${pos.homie[1]}" x2="${pos.jev[0]}" y2="${pos.jev[1]}" style="stroke-dasharray:3 4"/>`;
+  let html = "";
   ring.forEach(([id]) => html += `<line class="edge" id="e-${id}" x1="${pos.homie[0]}" y1="${pos.homie[1]}" x2="${pos[id][0]}" y2="${pos[id][1]}"/>`);
   AGENTS.forEach(([id, label, k]) => {
-    const [x, y] = pos[id], s = id === "homie" ? 70 : id === "jev" ? 44 : 50;
+    const [x, y] = pos[id], s = id === "homie" ? 70 : 50;
     html += `<g class="node" id="n-${id}" style="color:${COLORS[k]}">
       <circle class="node-ring" cx="${x}" cy="${y}" r="${s / 2 + 6}" stroke="currentColor"/>
       <clipPath id="c-${id}"><rect x="${x - s / 2}" y="${y - s / 2}" width="${s}" height="${s}" rx="${s * .28}"/></clipPath>
@@ -232,10 +231,12 @@ function render(s) {
   // chatter
   const log = (s.agentlog || []).filter(m => !who || m.user === who);
   $("msgcount").textContent = log.length ? log.length + " messages" : "";
-  $("feed").innerHTML = log.slice().reverse().slice(0, 60).map(m => `<div class="msg"><img src="${avatar(m.from)}" alt="">
+  $("feed").innerHTML = log.slice().reverse().slice(0, 60).map(m => m.from === "jev"
+    ? `<div class="msg"><img src="/avatars/homie.png" alt=""><div class="bubble" style="background:rgba(255,138,76,.06)"><div class="route">Homie · decided<i>${esc(m.t)}</i></div><p>${esc((m.summary || "").replace(/^[^:]+:\s*/, ""))}</p></div></div>`
+    : `<div class="msg"><img src="${avatar(m.from)}" alt="">
     <div class="bubble"><div class="route">${esc(key(m.from)[1])} → ${esc(key(m.to)[1])}<i>${esc(m.t)}</i></div><p>${esc(m.summary)}</p></div></div>`).join("") || '<div class="empty" style="padding:20px">Agent messages appear here live.</div>';
   const all = s.agentlog || [];
-  for (const m of all.slice(seen)) flash(m.from, m.to);
+  for (const m of all.slice(seen)) if (m.from !== "jev") flash(m.from, m.to);
   seen = all.length;
   // up next
   const tasks = (s.tasks || []).filter(t => !who || t.user === who).sort((a, b) => a.when_iso.localeCompare(b.when_iso));
@@ -243,7 +244,8 @@ function render(s) {
   const left = iso => { const m = Math.round((new Date(iso) - Date.now()) / 60000); return m < 60 ? m + "m" : m < 1440 ? Math.round(m / 60) + "h" : Math.round(m / 1440) + "d"; };
   $("tasks").innerHTML = tasks.map(t => `<div class="task"><img src="/avatars/later.png" style="width:24px;height:24px;border-radius:7px"><div><b>${esc(t.when_human)}</b> · ${esc(t.text)}</div><small>in ${left(t.when_iso)}</small></div>`).join("") || '<div class="tl" style="border:0">Nothing scheduled.</div>';
   // history
-  const items = who ? (s.history || {})[who] || [] : Object.entries(s.history || {}).flatMap(([u, xs]) => xs.map(x => ({ ...x, u }))).sort((a, b) => a.ts - b.ts);
+  const clean = x => ({ ...x, text: String(x.text || "").replace(/^jev → homie: /, "Homie decided · ") });
+  const items = (who ? (s.history || {})[who] || [] : Object.entries(s.history || {}).flatMap(([u, xs]) => xs.map(x => ({ ...x, u }))).sort((a, b) => a.ts - b.ts)).map(clean);
   $("histwho").textContent = who || "all users";
   $("timeline").innerHTML = items.slice(-80).reverse().map(x => `<div class="tl ${x.kind}"><span>${esc(x.t)}</span>${x.u && !who ? `<b style="color:var(--dim)">${esc(x.u)}</b> · ` : ""}${esc(x.text)}</div>`).join("") || '<div class="tl">Nothing yet.</div>';
 }
