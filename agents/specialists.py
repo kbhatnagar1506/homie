@@ -93,14 +93,27 @@ async def on_call(ctx: Context, sender: str, req: CallRequest):
     CURRENT_USER.set(req.user)
     building = BUILDINGS[req.building_id]
     allowed, why = can_call_now(building)
-    if not allowed:
+    if not allowed and env("DEMO_MODE", "0") == "1":
+        # Demo: the office is closed, so play a clearly-labelled simulated call instead of skipping it.
+        from homie.calls import simulated_live_call
+
+        await hub.log_event(f"📞 {building['name']} is {why}: playing a SIMULATED call for the demo")
+        result = await simulated_live_call(building, req.purpose, req.context)
+        allowed = None
+    if allowed is False:
         await hub.offer(req.building_id, status=why)
         await ctx.send(sender, CallResult(request_id=req.request_id, building_id=req.building_id, purpose=req.purpose,
                                           answered=False, summary=f"{building['name']} is {why}, so I didn't call."))
         return
-    await hub.offer(req.building_id, status=f"dialing ({req.purpose})")
-    await hub.log_event(f"📞 Dialing {building['name']} · {building.get('phone_display') or building.get('phone') or 'no number'} · {req.purpose}")
-    result = await place_call(building, req.purpose, req.context)
+    if allowed:
+        await hub.offer(req.building_id, status=f"dialing ({req.purpose})")
+        await hub.log_event(f"📞 Dialing {building['name']} · {building.get('phone_display') or building.get('phone') or 'no number'} · {req.purpose}")
+        result = await place_call(building, req.purpose, req.context)
+        if env("DEMO_MODE", "0") == "1" and not result.get("answered"):
+            from homie.calls import simulated_live_call
+
+            await hub.log_event(f"📞 {building['name']} didn't pick up: playing a SIMULATED call for the demo")
+            result = await simulated_live_call(building, req.purpose, req.context)
     if result.get("transcript"):
         from homie import jev
 
@@ -288,11 +301,17 @@ async def on_scout(ctx: Context, sender: str, req: ScoutRequest):
         await ctx.send(sender, ScoutResult(request_id=req.request_id, facts={}, shots=[], pages=0))
         return
     await hub.log_event(f"Scout: reading every page of {url}")
-    try:
-        out = await crawl(url, max_pages=req.max_pages or 8)
-    except Exception as e:
-        ctx.logger.error(f"Scout crawl failed: {e!r}")
-        out = {"facts": {}, "shots": [], "pages": 0}
+    from homie import cache
+
+    out = cache.get("scout", req.building_id) if env("DEMO_MODE", "0") == "1" else None
+    if not out:
+        try:
+            out = await crawl(url, max_pages=req.max_pages or 8)
+        except Exception as e:
+            ctx.logger.error(f"Scout crawl failed: {e!r}")
+            out = cache.get("scout", req.building_id) or {"facts": {}, "shots": [], "pages": 0}
+        if out.get("pages"):
+            cache.put("scout", req.building_id, out)
     ctx.logger.info(f"Scout read {out['pages']} pages of {url}: {[(p.get('name'), p.get('price')) for p in (out['facts'] or {}).get('floor_plans') or []]}")
     shots = [f"{PUBLIC_URL}/shots/{n}" for n in out["shots"]]
     await hub.log_event(f"Scout: read {out['pages']} pages, {len((out['facts'] or {}).get('floor_plans') or [])} floor plans")

@@ -25,6 +25,29 @@ def _slug(name: str) -> str:
 
 
 async def search_apartments(area: str, limit: int = 10) -> list[dict]:
+    """Live Places search with one retry; the demo cache answers when Google fails, or first in DEMO_MODE."""
+    from homie import cache
+    from homie.config import env
+
+    query = cache.canonical(area)
+    cached = cache.get("places", query)
+    if cached and env("DEMO_MODE", "0") == "1":
+        return [{**b, "open_now": False} for b in cached][:limit]
+    for attempt in range(2):
+        try:
+            found = await _search_live(query, limit)
+            if found:
+                cache.put("places", query, found)
+            return found
+        except Exception as e:
+            log.warning("Places search failed (attempt %s): %s", attempt + 1, e)
+    if cached:
+        log.warning("Places is down, using the cached results for %s", query)
+        return cached[:limit]
+    raise RuntimeError("Places search failed and nothing is cached")
+
+
+async def _search_live(area: str, limit: int) -> list[dict]:
     token, project = _token()
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(

@@ -1,0 +1,7 @@
+#!include:.gitignore
+# Ship the demo cache and its screenshots to Cloud Run (secrets stay excluded by .gitignore).
+!data/shots/
+!data/shots/**
+!data/cache/
+!data/cache/**
+.git

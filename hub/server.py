@@ -465,6 +465,61 @@ async def twilio_stream(websocket: WebSocket, key: str):
             await publish()
 
 
+@app.post("/api/simcall")
+async def sim_call(body: dict):
+    """A simulated call for demos: the script is voiced with ElevenLabs and streamed to /flow exactly like a live call."""
+    from homie import phone
+
+    key = phone.register(body["building_id"], "", "")
+    phone.CALLS[key]["live"] = True
+    asyncio.ensure_future(_play_sim(key, body["building_id"], body.get("lines", [])))
+    return {"key": key}
+
+
+async def _speak(text: str, voice: str) -> bytes:
+    import httpx
+
+    from homie import eleven
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice}", params={"output_format": "pcm_16000"},
+                                  headers={"xi-api-key": await eleven.best_key()},
+                                  json={"text": text, "model_id": "eleven_flash_v2_5", "voice_settings": {"stability": 0.45, "similarity_boost": 0.8}})
+        return r.content if r.status_code == 200 else b""
+    except Exception:
+        return b""
+
+
+async def _play_sim(key: str, building_id: str, lines: list[dict]) -> None:
+    from homie import phone
+    from homie.config import env
+
+    offer = state["offers"].setdefault(building_id, {"building_id": building_id})
+    offer.update({"call_key": key, "on_call": True, "simulated": True, "status": "on a simulated call"})
+    await publish()
+    voices = {"homie": env("PHONE_VOICE_ID", "cgSgspJ2msm6clMCkdW9"), "office": env("SIM_OFFICE_VOICE_ID", "CwhRBWXzGAHq8TQ4Fs17")}
+    # Voice every line up front (in parallel) so playback never stalls.
+    audio = await asyncio.gather(*(_speak(l["text"], voices.get(l["who"], voices["office"])) for l in lines))
+    said = []
+    for line, pcm in zip(lines, audio):
+        text = f"{line['who']}: {line['text']}"
+        said.append(text)
+        await transcript({"building_id": building_id, "line": text})
+        if pcm:
+            chunk = 3200  # 100 ms of 16 kHz 16-bit audio
+            for i in range(0, len(pcm), chunk):
+                phone._broadcast(key, 1 if line["who"] == "homie" else 0, 16000, pcm[i:i + chunk])
+                await asyncio.sleep(0.1)
+        else:
+            await asyncio.sleep(0.35 * len(line["text"].split()) + 0.4)
+        await asyncio.sleep(0.35)
+    offer.update({"on_call": False})
+    phone.CALLS[key]["live"] = False
+    phone.finish(key, answered=True, transcript="\n".join(said))
+    await publish()
+
+
 @app.get("/api/calls/live")
 def live_calls():
     from homie import phone

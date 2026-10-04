@@ -54,6 +54,8 @@ async def place_call(building: dict, purpose: str, context: dict) -> dict:
         return await _twilio_call(building, purpose, context)
     if not MOCK_CALLS and ELEVENLABS_API_KEY and building.get("phone"):
         return await _real_call(building, purpose, context)
+    if env("DEMO_MODE", "0") == "1":
+        return await simulated_live_call(building, purpose, context)
     if MOCK_CALLS:
         return await _mock_call(building, purpose, context)
     return {"answered": False, "summary": f"No phone line connected, so I couldn't call {building['name']}."}
@@ -183,9 +185,54 @@ def _simulated(building: dict) -> dict:
             "fees": rng.choice([150, 250, 350]), "matches_free_month": rng.random() < 0.5, "payment": rng.choice(["Online portal", "Cashier's check or money order", "Online portal or cashier's check"])}
 
 
+def _sim_script(building: dict, purpose: str, context: dict, m: dict) -> list[dict]:
+    name, price = building["name"], context.get("site_price") or m["price"]
+    deal = (m.get("discount") or "").strip()
+    deal = "no special running" if not deal or deal.lower().startswith(("none", "no ")) else deal.lower()
+    if purpose == "negotiate":
+        matched = m["matches_free_month"]
+        return [
+            {"who": "homie", "text": f"Hi, it's Homie again, the AI assistant for the international student. Quick one: {context.get('competitor', 'another building')} is offering {context.get('competitor_offer', 'a better deal')}. Could you match that?"},
+            {"who": "office", "text": "Let me check with my manager." if matched else "Hmm, I'm afraid that's the best we can do right now."},
+            *([{"who": "office", "text": f"Okay, we can do a month free at {price - 90} a month if they sign this week."},
+               {"who": "homie", "text": f"Amazing, {price - 90} a month with a month free. I'll let the student know. Thank you!"}] if matched else
+              [{"who": "homie", "text": "Totally understand. Thanks for checking, have a great day!"}]),
+        ]
+    return [
+        {"who": "homie", "text": f"Hi! This is Homie, an AI assistant calling for an international student. Is this {name}?"},
+        {"who": "office", "text": "Yes it is, how can I help you?"},
+        {"who": "homie", "text": f"Do you have a one-bedroom for {context.get('move_in', 'August 20th')}, and what's the rent?"},
+        {"who": "office", "text": f"We do. It's {price} a month, and right now there's {deal}."},
+        {"who": "homie", "text": "Great. The student doesn't have a Social Security Number yet. What do you accept instead?"},
+        {"who": "office", "text": f"{m['ssn_alternative']} works for us."},
+        {"who": "homie", "text": f"Perfect, so {price} a month, {deal}. Thanks so much, bye!"},
+    ]
+
+
+async def simulated_live_call(building: dict, purpose: str, context: dict) -> dict:
+    """Demo fallback when a real call can't happen: a scripted call you can hear on /flow, always labelled simulated."""
+    from homie.config import HUB_URL
+
+    m = building.get("mock") or _simulated(building)
+    lines = _sim_script(building, purpose, context, m)
+    try:
+        await asyncio.sleep(random.uniform(0, 2.5))
+        async with httpx.AsyncClient(timeout=20) as client:
+            key = (await client.post(f"{HUB_URL}/api/simcall", json={"building_id": building["id"], "lines": lines})).json()["key"]
+            await client.get(f"{HUB_URL}/api/calls/{key}/wait", params={"timeout": 120}, timeout=130)
+    except Exception as e:
+        log.warning("simulated call failed: %s", e)
+    result = await _mock_call(building, purpose, {**context, "_no_wait": True})
+    if context.get("site_price") and purpose == "quote":
+        result["price"] = context["site_price"]
+    result["summary"] = result.get("summary", "").replace("(simulated, no real call placed)", "(simulated call)")
+    return result
+
+
 async def _mock_call(building: dict, purpose: str, context: dict) -> dict:
     """Rehearsal only. With real buildings every number is simulated and labelled that way."""
-    await asyncio.sleep(random.uniform(2.5, 6))
+    if not context.get("_no_wait"):
+        await asyncio.sleep(random.uniform(2.5, 6))
     m = building.get("mock") or _simulated(building)
     tag = " (simulated, no real call placed)"
     if purpose == "quote":

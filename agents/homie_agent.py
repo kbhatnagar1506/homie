@@ -197,7 +197,10 @@ async def fill_from_memory(ctx: Context, req: dict) -> None:
         remember=req.get("_text", "")), 30)
     if isinstance(mem, MemoryResult) and mem.facts:
         known = await parse_intent(" ".join(mem.facts))
+        said_place = any(req.get(k) not in (None, "") for k in ("area", "city"))
         for key in ("area", "city", "max_rent", "move_in", "beds", "no_ssn"):
+            if key in ("area", "city") and said_place:
+                continue  # they named a place this time: never swap it for an old one from memory
             if req.get(key) in (None, "") and known.get(key) not in (None, ""):
                 req[key] = known[key]
         req["_memory"] = mem.answer or "; ".join(mem.facts[:4])
@@ -238,7 +241,7 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
             await hub.step("find", "blocked", "Search failed")
             await say(ctx, sender, f"I couldn't search {area} just now. Try again in a minute.", end=True)
             return
-        use(found[: int(env("MAX_CALLS", "10"))])
+        use(found[: int(env("MAX_CALLS", "6" if env("DEMO_MODE", "0") == "1" else "10"))])
     await hub.post("/api/buildings", {"buildings": list(BUILDINGS.values())})
     open_now = sum(1 for b in BUILDINGS.values() if b.get("open_now"))
     await say(ctx, sender,
@@ -246,7 +249,9 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
               f"{f' ({open_now} open right now)' if any(b.get('real') for b in BUILDINGS.values()) else ''}. "
               + (f"Scout's reading their websites, then Calls dials every open office about a {label}"
                  if open_now or not any(b.get('real') for b in BUILDINGS.values()) else
-                 f"They're all closed right now, so Scout's reading their websites and Later will call the moment they open, about a {label}")
+                 (f"They're all closed right now, so for this demo Calls runs simulated calls you can hear live on /flow, about a {label}"
+                  if env("DEMO_MODE", "0") == "1" else
+                  f"They're all closed right now, so Scout's reading their websites and Later will call the moment they open, about a {label}"))
               + f"{f' under ${budget}' if budget else ''}{', no SSN' if req.get('no_ssn') else ''}. You can go to sleep.")
 
     # 0. Scout reads every building's website first: live prices, specials, office hours, no-SSN rules.
@@ -265,7 +270,8 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
     # 2. Call the liked buildings whose offices are open right now (Caller agent).
     await hub.step("offers", "active", f"Calling {len(liked)} buildings you liked")
     replies = await asyncio.gather(*(
-        ask(ctx, caller.address, CallRequest(building_id=b, purpose="quote", context={"move_in": req.get("move_in") or "August 20"}), CALL_TIMEOUT)
+        ask(ctx, caller.address, CallRequest(building_id=b, purpose="quote", context={"move_in": req.get("move_in") or "August 20",
+                                                                                     **({"site_price": site[b]["price"]} if site.get(b, {}).get("price") else {})}), CALL_TIMEOUT)
         for b in liked
     ))
     offers = []
@@ -440,7 +446,8 @@ async def handle_building(ctx: Context, sender: str, req: dict, url: str) -> Non
 
 async def scout_all(ctx: Context, beds: int | None, site: dict | None = None) -> list[dict]:
     """Scout reads every building's site in parallel (4 at a time) and posts what it finds to mission control."""
-    gate = asyncio.Semaphore(int(env("SCOUT_PARALLEL", "4")))
+    demo = env("DEMO_MODE", "0") == "1"
+    gate = asyncio.Semaphore(int(env("SCOUT_PARALLEL", "6" if demo else "4")))
     found: list[dict] = []
     site = site if site is not None else {}
 
@@ -449,7 +456,7 @@ async def scout_all(ctx: Context, beds: int | None, site: dict | None = None) ->
         if not b.get("website"):
             return
         async with gate:
-            res = await ask(ctx, scout.address, ScoutRequest(building_id=bid, url=b["website"], beds=beds, max_pages=6), 150)
+            res = await ask(ctx, scout.address, ScoutRequest(building_id=bid, url=b["website"], beds=beds, max_pages=3 if demo else 6), 50 if demo else 150)
         if not isinstance(res, ScoutResult):
             return
         facts = res.facts or {}
