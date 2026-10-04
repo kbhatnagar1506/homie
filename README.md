@@ -23,6 +23,7 @@ It finds, calls and negotiates your apartment, handles the no-SSN paperwork, cha
   <img src="relay_app/avatars/memory.png" width="52" />
   <img src="relay_app/avatars/later.png" width="52" />
   <img src="relay_app/avatars/scout.png" width="52" />
+  <img src="relay_app/avatars/vibecheck.png" width="52" />
 </p>
 
 ---
@@ -47,7 +48,8 @@ And the team gets to work, posting in your Relay group chat like real people wit
 
 1. **Homie** reads the request (Jev decides the route, bedrooms, no-SSN, urgency in one call) and pulls what it already knows about you from memory.
 2. **Scout** reads the building's entire website: floor plans, live prices, fees, office hours, application link, and its rules for international applicants.
-3. **Pics** screenshots the floor plans into the chat.
+3. **Vibecheck** sends a swipe link (ASI:One and Relay): every building as a card with all its screenshots, live price and special. Swipe right or left; it learns your taste.
+4. **Pics** screenshots the floor plans into the chat.
 4. **Calls** posts the live prices and specials, and phones the office if it's open. It always says it's an AI assistant calling for a student.
 5. **Papers** works out exactly what to send instead of an SSN.
 6. **Policy** flags fees and Georgia tenant law to watch.
@@ -71,7 +73,7 @@ After you move in: *"my ice maker is broken"*. Start a **video call** with Fix. 
 
 ## The team
 
-Ten [Fetch.ai uAgents](https://fetch.ai), each with its own address, all published on Agentverse:
+Eleven [Fetch.ai uAgents](https://fetch.ai), each with its own address, all published on Agentverse:
 
 | | Agent | Job | Address |
 |---|---|---|---|
@@ -85,6 +87,7 @@ Ten [Fetch.ai uAgents](https://fetch.ai), each with its own address, all publish
 | <img src="relay_app/avatars/memory.png" width="28"/> | **Memory** | Remembers you and everything the team did, per user (Mapi). | `agent1qff0lvefgk3etwvjp7h4a08725cc3yz0ftd0lrdf7p9kxw9zpa7v5nfsq80` |
 | <img src="relay_app/avatars/later.png" width="28"/> | **Later** | The waiting agent. Schedules future work and runs it on time. | `agent1qdj7s537sarkkw0lcqpat5n6st5hmwyr4zqq0wqa6ac4drwsh2wyq3wlzvs` |
 | <img src="relay_app/avatars/scout.png" width="28"/> | **Scout** | Reads a building's whole website into structured facts. | `agent1q0hk8gqpa5wvd8mcafyvdhppr9r8ae9jw3dss5swmd3afpspgse9utwv3sa` |
+| <img src="relay_app/avatars/vibecheck.png" width="28"/> | **Vibecheck** | Swipe cards (left/right) from Scout's findings; learns your taste and shortlists. | `agent1qw997gd5awven0egprca6r62g04shle0vugpd467358jstvan6mfze37sha` |
 
 Scout exists because of a rule we gave the team: **when it can't find something, make an agent for it.** Homie couldn't get prices for one specific building, so Scout was born.
 
@@ -112,6 +115,10 @@ Scout exists because of a rule we gave the team: **when it can't find something,
 - **Gemini on Vertex** for everything else: `gemini-2.5-flash` for writing, flash-lite for calls and vision, `gemini-2.5-flash-image` for the avatars, **Veo 3** for the video-call figurine's talking and listening loops.
 - **Memory.** Every agent reads from and writes to Mapi, scoped per user, before it says anything.
 - **Payments.** Fetch Payment Protocol (FET, verified on-chain), plus a Relay Stripe card at key handoff. Nothing is charged until you get your keys.
+
+## Live calls you can hear
+
+Calls run on an ElevenLabs Agent bridged from Twilio in `ulaw_8000` with no transcoding: about 1s from the office going quiet to Homie answering. Open `/flow` for a dark wireframe of the whole team, a live console of every agent message and dial, and **Hear all calls** to listen to every live call at once, panned in stereo. Even on a Sunday Homie decides: it ranks the buildings you liked on Scout's live prices, and Later calls them the moment they open.
 
 ## Video calls
 
