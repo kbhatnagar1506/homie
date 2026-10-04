@@ -36,11 +36,11 @@
   .card h2 { margin: 0; font-size: 26px; line-height: 1.1; letter-spacing: -.02em; text-shadow: 0 2px 12px rgba(0,0,0,.6); }
   .card .addr { color: rgba(255,255,255,.75); font-size: 13px; margin-top: 4px; }
   .card .info { padding: 14px 18px 18px; }
-  .price { display: flex; align-items: baseline; gap: 8px; }
+  .price { display: flex; align-items: baseline; gap: 4px 8px; flex-wrap: wrap; }
   .price b { font-size: 24px; letter-spacing: -.02em; }
   .price span { color: var(--dim); font-size: 13px; }
-  .price .over { color: var(--nope); font-size: 12px; font-weight: 600; }
-  .special { display: inline-block; margin-top: 8px; padding: 5px 10px; border-radius: 999px; background: rgba(43,255,154,.12); color: var(--like); font-size: 12.5px; font-weight: 600; }
+  .price .overbudget { color: var(--nope); font-size: 12px; font-weight: 600; }
+  .special { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 8px; padding: 5px 10px; border-radius: 12px; background: rgba(43,255,154,.12); color: var(--like); font-size: 12.5px; font-weight: 600; }
   .vibe { margin: 10px 0 0; font-size: 15px; line-height: 1.4; color: #dfe5ee; }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .tags span { padding: 5px 10px; border-radius: 999px; background: var(--chip); font-size: 12px; color: #cfd6e2; }
@@ -88,7 +88,7 @@
 <script>
 const deckId = location.pathname.split("/").pop();
 const deckEl = document.getElementById("deck");
-let cards = [], i = 0, history = [], swipes = {};
+let cards = [], i = 0, undoStack = [], swipes = {};
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 async function load() {
@@ -101,8 +101,9 @@ async function load() {
 }
 
 function cardHtml(c) {
-  const shots = c.shots || [], img = shots[0];
-  const price = c.price ? `<b>$${Number(c.price).toLocaleString()}</b><span>/mo${c.per_bed ? " per bed" : ""} · ${c.beds === 0 ? "studio" : (c.beds || 1) + " bed"} · live on their site</span>${c.over_budget ? `<span class="over">over budget</span>` : ""}`
+  const shots = (c.shots || []).map(u => u.includes("/shots/") ? location.origin + u.slice(u.indexOf("/shots/")) : u), img = shots[0];
+  c.shots = shots;
+  const price = c.price ? `<b>$${Number(c.price).toLocaleString()}</b><span>/mo${c.per_bed ? " per bed" : ""} · ${c.beds === 0 ? "studio" : (c.beds || 1) + " bed"} · live on their site</span>${c.over_budget ? `<span class="overbudget">over budget</span>` : ""}`
                         : `<b style="font-size:17px">Price on request</b><span>Homie will ask the office</span>`;
   return `<div class="pic" style="${img ? `background-image:url('${esc(img)}')` : ""}">${img ? "" : `<div class="noimg">🏙️</div>`}
       ${shots.length > 1 ? `<div class="dots">${shots.map((_, k) => `<i class="${k ? "" : "on"}"></i>`).join("")}</div>` : ""}
@@ -163,15 +164,15 @@ async function fling(el, c, dir) {
   el.style.transform = `translate(${dir === "right" ? 140 : -140}vw, -40px) rotate(${dir === "right" ? 30 : -30}deg)`;
   el.querySelector(`.stamp.${dir === "right" ? "like" : "nope"}`).style.opacity = 1;
   if (navigator.vibrate) navigator.vibrate(12);
-  history.push(i); swipes[c.building_id] = dir; i++;
+  undoStack.push(i); swipes[c.building_id] = dir; i++;
   fetch(`/api/vibe/${deckId}/swipe`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ building_id: c.building_id, dir }) });
   setTimeout(render, 260);
 }
 
-function top() { return deckEl.lastElementChild; }
-document.getElementById("yes").onclick = () => { const el = top(); if (el && i < cards.length) fling(el, cards[i], "right"); };
-document.getElementById("no").onclick = () => { const el = top(); if (el && i < cards.length) fling(el, cards[i], "left"); };
-document.getElementById("undo").onclick = () => { if (history.length) { i = history.pop(); delete swipes[cards[i].building_id]; render(); } };
+function topCard() { return deckEl.lastElementChild; }
+document.getElementById("yes").onclick = () => { const el = topCard(); if (el && i < cards.length) fling(el, cards[i], "right"); };
+document.getElementById("no").onclick = () => { const el = topCard(); if (el && i < cards.length) fling(el, cards[i], "left"); };
+document.getElementById("undo").onclick = () => { if (undoStack.length) { i = undoStack.pop(); delete swipes[cards[i].building_id]; render(); } };
 addEventListener("keydown", e => { if (e.key === "ArrowRight") document.getElementById("yes").click(); if (e.key === "ArrowLeft") document.getElementById("no").click(); });
 
 function finish() {
