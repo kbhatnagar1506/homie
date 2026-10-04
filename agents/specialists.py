@@ -10,6 +10,7 @@ import uuid
 from uagents import Agent, Context
 
 from homie import hub_client as hub
+from homie import mapi
 from homie.calls import place_call
 from homie.events import team_post
 from homie.llm import complete_text
@@ -26,6 +27,8 @@ from homie.models import (
     PolicyResult,
     PaperworkRequest,
     PaperworkResult,
+    MemoryRequest,
+    MemoryResult,
     PicturesRequest,
     PicturesResult,
     RepairRequest,
@@ -36,7 +39,7 @@ from homie.models import (
 MAILBOX = env("AGENTVERSE_MAILBOX", "1") == "1"
 
 
-AVATARS = {"caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
+AVATARS = {"memory": "memory", "caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
 
 
 def specialist(role: str, description: str, concurrent: bool = True) -> Agent:
@@ -52,6 +55,7 @@ negotiator = specialist("negotiator", "Negotiates apartment offers using competi
 paperwork = specialist("paperwork", "No-SSN rental paperwork: documents, applications, cashier's-check plans. Part of Homie.", concurrent=False)
 repairs = specialist("repairs", "Files repairs, calls the office, retries and emails until it is booked. Part of Homie.")
 policy = specialist("policy", "Plain-English lease and tenant-rights help for Georgia and US renters. Part of Homie.")
+memory = specialist("memory", "Long-term memory of everything a renter has told Homie, stored in Mapi. Ask it anything about them. Part of Homie.")
 pictures = specialist("pictures", "Opens apartment listings in a real browser and sends screenshots. Part of Homie.")
 
 CALL_TIMEOUT = 300
@@ -207,6 +211,24 @@ async def on_policy(ctx: Context, sender: str, req: PolicyRequest):
                                  fallback="I couldn't reach my legal notes just now. For anything urgent, Michigan Legal Help (michiganlegalhelp.org) is free.")
     await hub.log_event("Policy question answered")
     await ctx.send(sender, PolicyResult(request_id=req.request_id, answer=answer))
+
+
+# ---------- Memory (Mapi) ----------
+
+MEMORY_PROMPT = ("You are Homie Memory. Answer the question using only the memories below, in one to three short "
+                 "sentences. If they don't cover it, say you don't know that yet. Memories:\n{memories}")
+
+
+@memory.on_message(MemoryRequest, replies=MemoryResult)
+async def on_memory(ctx: Context, sender: str, req: MemoryRequest):
+    if req.remember:
+        await mapi.remember(req.remember, tags=["profile"], source="homie")
+    facts = [m["content"] for m in await mapi.recall(req.question, limit=10)] if req.question else []
+    answer = ""
+    if req.question:
+        answer = await complete_text(MEMORY_PROMPT.format(memories="\n".join(f"- {f}" for f in facts) or "(none)"),
+                                     [{"role": "user", "content": req.question}], fallback="; ".join(facts[:3]))
+    await ctx.send(sender, MemoryResult(request_id=req.request_id, answer=answer, facts=facts))
 
 
 # ---------- Pictures ----------

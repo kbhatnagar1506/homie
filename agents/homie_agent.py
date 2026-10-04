@@ -25,7 +25,7 @@ from uagents_core.contrib.protocols.payment import (
     payment_protocol_spec,
 )
 
-from agents.specialists import caller, negotiator, paperwork, pictures, policy, repairs
+from agents.specialists import caller, memory, negotiator, paperwork, pictures, policy, repairs
 from homie import hub_client as hub
 from homie.config import PUBLIC_URL, ROOT, env, seed
 from homie.buildings import BUILDINGS, use
@@ -39,6 +39,8 @@ from homie.models import (
     NegotiateResult,
     PaperworkRequest,
     PaperworkResult,
+    MemoryRequest,
+    MemoryResult,
     PicturesRequest,
     PicturesResult,
     PolicyRequest,
@@ -105,6 +107,7 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
     elif intent["intent"] == "policy":
         await handle_policy(ctx, sender, text)
     elif intent["intent"] == "search":
+        intent["_text"] = text
         active.add(sender)
         try:
             await handle_search(ctx, sender, intent)
@@ -118,6 +121,16 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
 
 
 async def handle_search(ctx: Context, sender: str, req: dict) -> None:
+    # Ask Homie Memory (Mapi) what we already know, and fill any gaps in this request from it.
+    mem = await ask(ctx, memory.address, MemoryRequest(
+        question="Apartment preferences: city or neighborhood, budget, move-in date, bedrooms, SSN status, must-haves, deal-breakers",
+        remember=req.get("_text", "")), 30)
+    if isinstance(mem, MemoryResult) and mem.facts:
+        known = await parse_intent(" ".join(mem.facts))
+        for key in ("area", "city", "max_rent", "move_in", "beds", "no_ssn"):
+            if not req.get(key) and known.get(key):
+                req[key] = known[key]
+        await hub.log_event("Memory: " + (mem.answer or "; ".join(mem.facts[:3]))[:200])
     area = req.get("area") or req.get("city") or env("DEFAULT_AREA", "downtown Atlanta, GA")
     budget = req.get("max_rent")
     beds = req.get("beds") or 1
@@ -298,6 +311,7 @@ async def on_reject(ctx: Context, sender: str, msg: RejectPayment):
 @homie.on_message(RepairResult)
 @homie.on_message(PolicyResult)
 @homie.on_message(PicturesResult)
+@homie.on_message(MemoryResult)
 async def on_specialist_reply(ctx: Context, sender: str, msg):
     resolve(msg)
 

@@ -216,6 +216,22 @@ class RelayTeam:
         caption = await self.in_voice("pics", f"Screenshots of {', '.join(label for _, label in targets[:3])}." if images else "That page wouldn't load for me. Try another link?")
         await self.send("pics", chat_id, caption, extra=[{"type": "media", "url": u} for u in images])
 
+    async def _memory(self, chat_id: str, text: str) -> None:
+        from homie import mapi
+
+        kind = await complete_text("Reply with exactly QUESTION if the message asks about the person or what you know, "
+                                   "otherwise REMEMBER.", [{"role": "user", "content": text}], fallback="QUESTION")
+        if "REMEMBER" in kind.upper() and "?" not in text:
+            await memory.update(self.owner, text)
+            await mapi.remember(text, tags=["profile", "told-directly"], source="relay")
+            reply = await self.in_voice("memory", f"Saved. I'll remember: {text}")
+        else:
+            facts = [m["content"] for m in await mapi.recall(text, limit=10)]
+            reply = await complete_text(
+                TEAM["memory"].voice + "\nAnswer from these memories only:\n" + ("\n".join(f"- {f}" for f in facts) or "(nothing yet)"),
+                [{"role": "user", "content": text}], fallback="; ".join(facts[:3]) or "I don't know that yet.")
+        await self.send("memory", chat_id, reply)
+
     async def _on_message(self, receiver: str, data: dict) -> None:
         if data.get("sender_handle") != self.owner:
             return  # ignore our own team's messages in the group
@@ -240,6 +256,9 @@ class RelayTeam:
 
         if role == "pics":
             await self._pics(chat_id, text)
+            return
+        if role == "memory":
+            await self._memory(chat_id, text)
             return
 
         profile = await memory.update(self.owner, text)

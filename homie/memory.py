@@ -4,6 +4,7 @@ import json
 import threading
 
 from homie.config import ROOT
+from homie import mapi
 from homie.llm import complete_json
 
 PATH = ROOT / "data" / "memory.json"
@@ -27,7 +28,15 @@ def get(person: str) -> dict:
     return _load().get(person, {})
 
 
+FACTS = """List the durable facts this message reveals about the person (preferences, constraints, plans, people,
+places, dates, documents they have or lack). Each fact one short third-person sentence starting with "They".
+Return JSON {"facts": [...]}; an empty list if there are none. JSON only."""
+
+
 async def update(person: str, message: str) -> dict:
+    facts = (await complete_json(FACTS, message) or {}).get("facts") or []
+    for fact in facts[:6]:
+        await mapi.remember(fact, tags=["profile", person], source="relay")
     current = get(person)
     updated = await complete_json(EXTRACT, f"Profile: {json.dumps(current)}\nMessage: {message}")
     if isinstance(updated, dict):

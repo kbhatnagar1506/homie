@@ -89,3 +89,15 @@ class PicturesRequest(Model):
 class PicturesResult(Model):
     request_id: str = ""
     images: list[str] = []
+
+
+class MemoryRequest(Model):
+    request_id: str = ""
+    question: str = ""
+    remember: str = ""
+
+
+class MemoryResult(Model):
+    request_id: str = ""
+    answer: str = ""
+    facts: list[str] = []

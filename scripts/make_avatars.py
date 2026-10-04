@@ -26,6 +26,7 @@ ROLES = {
     "fix": ("mint green", "the same little house character wearing a yellow hard hat, holding a wrench"),
     "policy": ("butter yellow", "the same little house character wearing a tiny judge's wig, holding a small balance scale"),
     "pics": ("pink", "the same little house character holding a camera up to its face, taking a photo"),
+    "memory": ("soft cyan", "the same little house character with a glowing pastel brain peeking out of its open roof, hugging a small notebook, thoughtful and kind"),
 }
 
 
