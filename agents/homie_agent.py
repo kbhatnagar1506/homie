@@ -328,7 +328,7 @@ async def handle_building(ctx: Context, sender: str, req: dict, url: str) -> Non
     intl = facts.get("international_or_no_ssn") or ""
     fees = facts.get("fees") or {}
     pw = await ask(ctx, paperwork.address, PaperworkRequest(building_id=building["id"], ssn_alternative=intl or "Passport, I-20 and proof of funds (not stated on their site, Homie will confirm with the office)",
-                                                            payment=facts.get("notes") or "", move_in=req.get("move_in")), 60)
+                                                            payment=facts.get("payment") or "", move_in=req.get("move_in")), 60)
     pol = await ask(ctx, policy.address, PolicyRequest(question=f"Before applying at {building['name']}: fees {fees}, lease terms {facts.get('lease_terms')}, "
                                                                 f"utilities {facts.get('utilities')}, pet policy {facts.get('pet_policy')}. What should an international student without an SSN watch out for?",
                                                        building_id=building["id"]), 60)
