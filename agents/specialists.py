@@ -31,6 +31,8 @@ from homie.models import (
     PolicyResult,
     PaperworkRequest,
     PaperworkResult,
+    ScoutRequest,
+    ScoutResult,
     ScheduleRequest,
     ScheduleResult,
     TaskDue,
@@ -54,7 +56,7 @@ async def _log_activity(role: str, text: str, images: list[str]) -> None:
 events.subscribe(_log_activity)
 
 
-AVATARS = {"later": "later", "memory": "memory", "caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
+AVATARS = {"scout": "scout", "later": "later", "memory": "memory", "caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
 
 
 def specialist(role: str, description: str, concurrent: bool = True) -> Agent:
@@ -70,6 +72,7 @@ negotiator = specialist("negotiator", "Negotiates apartment offers using competi
 paperwork = specialist("paperwork", "No-SSN rental paperwork: documents, applications, cashier's-check plans. Part of Homie.", concurrent=False)
 repairs = specialist("repairs", "Files repairs, calls the office, retries and emails until it is booked. Part of Homie.")
 policy = specialist("policy", "Plain-English lease and tenant-rights help for Georgia and US renters. Part of Homie.")
+scout = specialist("scout", "Reads a building's whole website: floor plans, live prices, specials, fees, pet and parking policy, how to apply, no-SSN rules. Part of Homie.")
 later = specialist("later", "The waiting agent: holds future tasks (get offers Monday, call when the office opens, rent reminders) and runs them on time. Part of Homie.")
 memory = specialist("memory", "Long-term memory of everything a renter has told Homie, stored in Mapi. Ask it anything about them. Part of Homie.")
 pictures = specialist("pictures", "Opens apartment listings in a real browser and sends screenshots. Part of Homie.")
@@ -265,6 +268,29 @@ async def on_policy(ctx: Context, sender: str, req: PolicyRequest):
                                  fallback="I couldn't reach my legal notes just now. For anything urgent, Michigan Legal Help (michiganlegalhelp.org) is free.")
     await hub.log_event("Policy question answered")
     await ctx.send(sender, PolicyResult(request_id=req.request_id, answer=answer))
+
+
+# ---------- Scout: reads a building's whole website ----------
+
+@scout.on_message(ScoutRequest, replies=ScoutResult)
+async def on_scout(ctx: Context, sender: str, req: ScoutRequest):
+    CURRENT_USER.set(req.user)
+    from homie.scout import crawl
+
+    url = req.url or BUILDINGS.get(req.building_id, {}).get("website") or ""
+    if not url:
+        await ctx.send(sender, ScoutResult(request_id=req.request_id, facts={}, shots=[], pages=0))
+        return
+    await hub.log_event(f"Scout: reading every page of {url}")
+    try:
+        out = await crawl(url)
+    except Exception as e:
+        ctx.logger.error(f"Scout crawl failed: {e!r}")
+        out = {"facts": {}, "shots": [], "pages": 0}
+    ctx.logger.info(f"Scout read {out['pages']} pages of {url}: {[(p.get('name'), p.get('price')) for p in (out['facts'] or {}).get('floor_plans') or []]}")
+    shots = [f"{PUBLIC_URL}/shots/{n}" for n in out["shots"]]
+    await hub.log_event(f"Scout: read {out['pages']} pages, {len((out['facts'] or {}).get('floor_plans') or [])} floor plans")
+    await ctx.send(sender, ScoutResult(request_id=req.request_id, facts=out["facts"], shots=shots, pages=out["pages"]))
 
 
 # ---------- Later: the waiting agent ----------

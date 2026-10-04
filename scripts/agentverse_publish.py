@@ -13,7 +13,7 @@ from uagents.mailbox import AgentverseConnectRequest, register_in_agentverse
 from uagents_core.registration import RegistrationRequest
 
 from agents.homie_agent import homie
-from agents.specialists import caller, later, negotiator, memory, paperwork, pictures, policy, repairs
+from agents.specialists import caller, later, negotiator, scout, memory, paperwork, pictures, policy, repairs
 from homie.config import env
 
 
@@ -21,7 +21,7 @@ async def main() -> None:
     key = env("AGENTVERSE_API_KEY")
     if not key:
         sys.exit("Put AGENTVERSE_API_KEY in .env first (https://agentverse.ai → Profile → API Keys).")
-    for agent in (homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, later):
+    for agent in (homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, later, scout):
         details = RegistrationRequest(
             address=agent.address, name=agent.name, handle=agent._handle, url=None,
             profile=agent._build_registration_profile(), endpoints=agent._endpoints,

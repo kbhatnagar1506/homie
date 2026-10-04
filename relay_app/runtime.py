@@ -297,6 +297,11 @@ class RelayTeam:
         while True:
             await asyncio.sleep(2)
             for item in (await hub.post("/api/live/claim", {})).get("items", []):
+                if item.get("type") == "message":  # the owner's request handed in from outside Relay
+                    self.route = ("homie", self._chat_for("homie"))
+                    await self.send("homie", self._chat_for("homie"), await self.in_voice("homie", f"Got your request: {item['text']}"))
+                    await self.send_to_homie(item["text"])
+                    continue
                 self.route = ("fix", self.state["direct"].get("fix") or self._chat_for("fix"))
                 photo = item.get("photo")
                 if photo and photo.startswith("/"):

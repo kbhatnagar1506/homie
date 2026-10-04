@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Homie: Your person in America</title>
+<meta name="description" content="Homie is a team of 9 AI agents that rents your first US apartment for you from abroad. It calls leasing offices, negotiates, handles no-SSN paperwork, and you only pay when you get your keys.">
+<meta name="theme-color" content="#07070a">
+<link rel="icon" href="/avatars/homie.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preload" as="image" href="/avatars/homie.png">
+<style>
+:root{
+  --bg:#07070a;
+  --bg-2:#0c0c11;
+  --bg-3:#121219;
+  --surface:rgba(255,255,255,.035);
+  --surface-2:rgba(255,255,255,.06);
+  --line:rgba(255,255,255,.08);
+  --line-2:rgba(255,255,255,.14);
+  --text:#f5f2ed;
+  --muted:#a8a39c;
+  --dim:#6f6b66;
+  --accent:#ff9b5e;
+  --accent-2:#ffc08a;
+  --sky:#8db9ff;
+  --mint:#93e2bd;
+  --rose:#ff8fa6;
+  --danger:#ff5d5d;
+  --ok:#5be39a;
+  --radius:20px;
+  --radius-lg:28px;
+  --maxw:1200px;
+  --gutter:clamp(16px,4vw,40px);
+  --font:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"Instrument Serif",ui-serif,Georgia,serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:clip;font-feature-settings:"ss01","cv11"}
+img,video{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+::selection{background:var(--accent);color:#1a0d04}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--gutter)}
+.serif{font-family:var(--serif);font-weight:400;font-style:italic;letter-spacing:-.01em}
+.grad{background:linear-gradient(100deg,var(--accent-2) 0%,var(--accent) 45%,var(--rose) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);display:inline-flex;align-items:center;gap:10px}
+.eyebrow::before{content:"";width:18px;height:1px;background:currentColor;opacity:.7}
+.h2{font-size:clamp(34px,5.4vw,64px);line-height:1.02;letter-spacing:-.035em;font-weight:700;margin-top:18px}
+.lede{color:var(--muted);font-size:clamp(16px,1.6vw,19px);max-width:600px;margin-top:18px}
+section{position:relative}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:10px;height:50px;padding:0 22px;border-radius:999px;font-weight:600;font-size:15px;letter-spacing:-.01em;transition:transform .25s var(--ease),background .25s,box-shadow .25s,border-color .25s;white-space:nowrap}
+.btn svg{width:18px;height:18px;flex:none}
+.btn-primary{background:var(--text);color:#0b0b0e;box-shadow:0 10px 40px -10px rgba(255,155,94,.55),inset 0 -2px 0 rgba(0,0,0,.08)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 50px -12px rgba(255,155,94,.75)}
+.btn-ghost{border:1px solid var(--line-2);background:rgba(255,255,255,.03);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.btn-ghost:hover{background:rgba(255,255,255,.08);transform:translateY(-2px)}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--danger);box-shadow:0 0 0 0 rgba(255,93,93,.6);animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,93,93,.6)}70%{box-shadow:0 0 0 10px rgba(255,93,93,0)}100%{box-shadow:0 0 0 0 rgba(255,93,93,0)}}
+
+/* nav */
+.nav{position:fixed;inset:0 0 auto 0;z-index:50;transition:background .3s,border-color .3s,backdrop-filter .3s;border-bottom:1px solid transparent}
+.nav.scrolled{background:rgba(7,7,10,.72);backdrop-filter:saturate(160%) blur(16px);-webkit-backdrop-filter:saturate(160%) blur(16px);border-color:var(--line)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;height:68px;gap:20px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.02em;font-size:18px}
+.brand img{width:32px;height:32px;border-radius:9px;box-shadow:0 0 0 1px var(--line-2),0 6px 20px -6px rgba(255,155,94,.6)}
+.nav-links{display:flex;gap:28px;font-size:14px;color:var(--muted)}
+.nav-links a{transition:color .2s}
+.nav-links a:hover{color:var(--text)}
+.nav .btn{height:40px;padding:0 16px;font-size:14px}
+
+/* hero */
+.hero{min-height:100svh;display:flex;align-items:center;overflow:hidden;isolation:isolate;padding:110px 0 80px}
+#stage{position:absolute;inset:0;z-index:-1;width:100%;height:100%;display:block;touch-action:pan-y}
+.hero::before{content:"";position:absolute;inset:0;z-index:-2;background:
+  radial-gradient(60% 60% at 70% 45%,rgba(255,155,94,.16),transparent 60%),
+  radial-gradient(40% 50% at 20% 80%,rgba(141,185,255,.10),transparent 60%),
+  radial-gradient(80% 60% at 50% 120%,rgba(255,143,166,.08),transparent 60%),var(--bg)}
+.hero::after{content:"";position:absolute;inset:auto 0 0 0;height:180px;z-index:-1;background:linear-gradient(to bottom,transparent,var(--bg));pointer-events:none}
+.hero-fallback{position:absolute;z-index:-1;right:12%;top:50%;width:min(38vw,340px);aspect-ratio:1;transform:translateY(-50%);border-radius:36px;overflow:hidden;box-shadow:0 0 120px rgba(255,155,94,.45),0 0 0 1px var(--line-2);transition:opacity .8s}
+.hero-fallback img{width:100%;height:100%;object-fit:cover}
+.hero.gl-on .hero-fallback{opacity:0;pointer-events:none}
+.hero-copy{max-width:600px;position:relative}
+.pill{display:inline-flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;border-radius:999px;border:1px solid var(--line-2);background:rgba(255,255,255,.04);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);font-size:13px;color:var(--muted)}
+.pill b{background:var(--accent);color:#1d0f05;font-weight:700;font-size:11px;padding:4px 9px;border-radius:999px;letter-spacing:.04em;text-transform:uppercase}
+.hero h1{font-size:clamp(52px,8.6vw,118px);line-height:.92;letter-spacing:-.05em;font-weight:800;margin-top:26px}
+.hero h1 .serif{font-weight:400;letter-spacing:-.02em;display:inline-block;padding-right:.08em}
+.hero .sub{font-size:clamp(17px,1.8vw,21px);color:var(--muted);margin-top:26px;max-width:520px;line-height:1.5}
+.hero .sub strong{color:var(--text);font-weight:600}
+.ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:36px}
+.hero-meta{display:flex;flex-wrap:wrap;gap:22px;margin-top:40px;font-size:13px;color:var(--dim)}
+.hero-meta span{display:inline-flex;align-items:center;gap:8px}
+.hero-meta i{width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 10px var(--mint)}
+.scroll-cue{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase;display:flex;flex-direction:column;align-items:center;gap:10px}
+.scroll-cue::after{content:"";width:1px;height:36px;background:linear-gradient(var(--dim),transparent);animation:cue 2.2s var(--ease) infinite}
+@keyframes cue{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+.hover-tag{position:absolute;z-index:3;pointer-events:none;padding:8px 12px;border-radius:12px;background:rgba(12,12,17,.85);border:1px solid var(--line-2);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:13px;opacity:0;transform:translate(-50%,-130%) scale(.96);transition:opacity .2s,transform .2s;white-space:nowrap}
+.hover-tag.on{opacity:1;transform:translate(-50%,-140%) scale(1)}
+.hover-tag b{display:block;font-size:14px}
+.hover-tag span{color:var(--muted)}
+
+/* stat band */
+.band{border-block:1px solid var(--line);background:linear-gradient(180deg,var(--bg-2),var(--bg))}
+.stats{display:grid;grid-template-columns:repeat(4,1fr)}
+.stat{padding:34px 24px;border-left:1px solid var(--line)}
+.stat:first-child{border-left:0}
+.stat .n{font-size:clamp(34px,4vw,48px);font-weight:700;letter-spacing:-.04em;line-height:1}
+.stat .n .serif{color:var(--accent)}
+.stat .l{color:var(--muted);font-size:14px;margin-top:10px;max-width:220px}
+
+/* problem */
+.problem{padding:clamp(90px,12vw,160px) 0}
+.pains{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-top:60px}
+.pain{grid-column:span 2;position:relative;padding:28px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--line);overflow:hidden;transition:border-color .3s,transform .4s var(--ease)}
+.pain:nth-child(4),.pain:nth-child(5){grid-column:span 3}
+.pain:hover{border-color:var(--line-2);transform:translateY(-4px)}
+.pain::before{content:"";position:absolute;inset:0;background:radial-gradient(400px circle at var(--mx,50%) var(--my,0%),rgba(255,155,94,.10),transparent 40%);opacity:0;transition:opacity .3s;pointer-events:none}
+.pain:hover::before{opacity:1}
+.pain .num{font-family:var(--serif);font-style:italic;font-size:64px;line-height:.8;color:transparent;-webkit-text-stroke:1px rgba(255,155,94,.55)}
+.pain h3{font-size:22px;letter-spacing:-.025em;margin-top:22px;line-height:1.15}
+.pain p{color:var(--muted);margin-top:10px;font-size:15px}
+.pain .fix{margin-top:20px;padding-top:16px;border-top:1px dashed var(--line-2);font-size:13px;color:var(--text);display:flex;gap:10px;align-items:center}
+.pain .fix img{width:26px;height:26px;border-radius:8px}
+.pain .fix span{color:var(--muted)}
+.pain .fix b{font-weight:600;color:var(--accent-2)}
+
+/* how */
+.how{padding:clamp(90px,12vw,160px) 0;background:linear-gradient(180deg,var(--bg),var(--bg-2) 30%,var(--bg-2) 70%,var(--bg))}
+.how-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(30px,6vw,90px);align-items:start}
+.how-head{position:sticky;top:120px}
+.chat{margin-top:36px;border-radius:var(--radius);border:1px solid var(--line);background:rgba(255,255,255,.025);padding:18px;font-size:14px}
+.chat-top{display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--line);color:var(--muted);font-size:13px}
+.chat-top img{width:28px;height:28px;border-radius:8px}
+.chat-top b{color:var(--text)}
+.bubble{margin-top:12px;padding:12px 14px;border-radius:16px;max-width:92%;line-height:1.45}
+.bubble.me{margin-left:auto;background:var(--accent);color:#1d0f05;border-bottom-right-radius:6px;font-weight:500}
+.bubble.them{background:var(--surface-2);border-bottom-left-radius:6px}
+.timeline{position:relative;padding-left:64px}
+.timeline .rail{position:absolute;left:23px;top:10px;bottom:10px;width:2px;background:var(--line);border-radius:2px;overflow:hidden}
+.timeline .rail i{position:absolute;inset:0;background:linear-gradient(var(--accent-2),var(--accent),var(--rose));transform-origin:top;transform:scaleY(var(--p,0))}
+.step{position:relative;padding:4px 0 46px}
+.step:last-child{padding-bottom:0}
+.step .node{position:absolute;left:-64px;top:0;width:48px;height:48px;border-radius:14px;overflow:hidden;box-shadow:0 0 0 1px var(--line-2),0 0 0 6px var(--bg-2);transition:box-shadow .4s,transform .4s var(--ease);filter:grayscale(.7) brightness(.7);transition:filter .5s,box-shadow .5s,transform .5s var(--ease)}
+.step.on .node{filter:none;transform:scale(1.06);box-shadow:0 0 0 1px rgba(255,155,94,.6),0 0 0 6px var(--bg-2),0 10px 30px -6px rgba(255,155,94,.6)}
+.step .node img{width:100%;height:100%;object-fit:cover}
+.step .who{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.step.on .who{color:var(--accent)}
+.step h3{font-size:clamp(20px,2.2vw,26px);letter-spacing:-.025em;margin-top:6px;line-height:1.15}
+.step p{color:var(--muted);margin-top:8px;max-width:560px}
+.log{margin-top:14px;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:#cfc9c1;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:14px;padding:12px 14px;overflow-wrap:anywhere}
+.log .k{color:var(--sky)}
+.log .g{color:var(--mint)}
+.log .o{color:var(--accent-2)}
+.log .d{color:var(--dim)}
+
+/* team */
+.team{padding:clamp(90px,12vw,160px) 0}
+.team-head{display:flex;justify-content:space-between;align-items:end;gap:30px;flex-wrap:wrap}
+.team-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:56px;perspective:1200px}
+.agent{--c:255,155,94;position:relative;border-radius:var(--radius-lg);padding:14px;background:var(--surface);border:1px solid var(--line);transition:transform .5s var(--ease),border-color .3s,box-shadow .5s;transform-style:preserve-3d;will-change:transform}
+.agent:hover{border-color:rgba(var(--c),.45);box-shadow:0 30px 80px -30px rgba(var(--c),.55)}
+.agent .ph{aspect-ratio:1/1;border-radius:18px;overflow:hidden;position:relative;background:rgb(var(--c))}
+.agent .ph img{width:100%;height:100%;object-fit:cover;transition:transform .7s var(--ease)}
+.agent:hover .ph img{transform:scale(1.06)}
+.agent .meta{display:flex;align-items:start;justify-content:space-between;gap:12px;padding:16px 8px 6px}
+.agent h3{font-size:20px;letter-spacing:-.02em}
+.agent p{color:var(--muted);font-size:14px;margin-top:4px;line-height:1.45}
+.agent .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:999px;border:1px solid rgba(var(--c),.4);color:rgb(var(--c));white-space:nowrap;margin-top:3px}
+.agent.lead{grid-column:span 1}
+.agent.lead .tag{background:rgba(var(--c),.15)}
+
+/* live */
+.live{padding:clamp(90px,12vw,160px) 0;overflow:hidden}
+.live::before{content:"";position:absolute;inset:0;background:radial-gradient(50% 60% at 30% 50%,rgba(255,155,94,.12),transparent 70%),radial-gradient(40% 50% at 80% 30%,rgba(141,185,255,.08),transparent 70%);pointer-events:none}
+.live-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:clamp(40px,7vw,110px);align-items:center;position:relative}
+.phone-wrap{display:flex;justify-content:center;position:relative}
+.phone{position:relative;width:min(330px,78vw);aspect-ratio:9/19.2;border-radius:52px;padding:11px;background:linear-gradient(145deg,#2a2a31,#0e0e12 40%,#1c1c22);box-shadow:0 0 0 1px rgba(255,255,255,.12),0 60px 120px -30px rgba(0,0,0,.9),0 0 140px -20px rgba(255,155,94,.35),inset 0 0 0 2px rgba(0,0,0,.6)}
+.screen{position:relative;width:100%;height:100%;border-radius:42px;overflow:hidden;background:#000}
+.screen video,.screen .poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.island{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:96px;height:28px;border-radius:20px;background:#000;z-index:4}
+.call-top{position:absolute;z-index:3;top:50px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
+.call-top .chip{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:999px;background:rgba(0,0,0,.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-weight:600}
+.pip{position:absolute;z-index:3;right:14px;top:92px;width:84px;aspect-ratio:3/4;border-radius:16px;overflow:hidden;border:2px solid rgba(255,255,255,.7);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.pip img{width:100%;height:100%;object-fit:cover}
+.pip::after{content:"";position:absolute;left:28%;top:48%;width:36%;height:24%;border:1.5px solid var(--ok);border-radius:6px;box-shadow:0 0 12px var(--ok);animation:scan 3s ease-in-out infinite}
+@keyframes scan{0%,100%{transform:translate(0,0)}50%{transform:translate(4px,-6px)}}
+.caption{position:absolute;z-index:3;left:14px;right:14px;bottom:108px;padding:12px 14px;border-radius:16px;background:rgba(0,0,0,.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);font-size:13px;line-height:1.4;min-height:62px;transition:opacity .35s}
+.caption b{display:block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-2);margin-bottom:3px;font-family:var(--mono);font-weight:500}
+.controls{position:absolute;z-index:3;left:0;right:0;bottom:30px;display:flex;justify-content:center;gap:14px}
+.controls span{width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.18);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:grid;place-items:center}
+.controls span svg{width:22px;height:22px}
+.controls span.end{background:var(--danger)}
+.float-card{position:absolute;z-index:2;padding:12px 14px;border-radius:16px;background:rgba(16,16,22,.82);border:1px solid var(--line-2);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font-size:13px;box-shadow:0 20px 50px -20px rgba(0,0,0,.8);display:flex;gap:10px;align-items:center;animation:bob 6s ease-in-out infinite}
+.float-card img{width:34px;height:34px;border-radius:10px}
+.float-card b{display:block;font-size:13px}
+.float-card span{color:var(--muted);font-size:12px}
+.fc-1{left:-4%;top:18%}
+.fc-2{right:-6%;top:44%;animation-delay:-3s}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.mode{display:inline-flex;padding:4px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);margin-top:30px}
+.mode button{padding:9px 16px;border-radius:999px;font-size:14px;color:var(--muted);transition:background .25s,color .25s}
+.mode button[aria-pressed="true"]{background:var(--text);color:#0b0b0e;font-weight:600}
+.feats{list-style:none;margin-top:30px;display:grid;gap:18px}
+.feats li{display:grid;grid-template-columns:36px 1fr;gap:14px;align-items:start}
+.feats .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:rgba(255,155,94,.12);color:var(--accent);border:1px solid rgba(255,155,94,.25)}
+.feats .ic svg{width:18px;height:18px}
+.feats b{display:block;font-weight:600;letter-spacing:-.01em}
+.feats span{color:var(--muted);font-size:15px}
+
+/* keys */
+.keys{padding:clamp(60px,9vw,120px) 0}
+.keys-card{position:relative;border-radius:36px;padding:clamp(32px,6vw,72px);overflow:hidden;border:1px solid var(--line-2);background:
+  radial-gradient(70% 120% at 100% 0%,rgba(255,155,94,.28),transparent 60%),
+  radial-gradient(60% 100% at 0% 100%,rgba(141,185,255,.14),transparent 60%),var(--bg-3)}
+.keys-card::after{content:"";position:absolute;inset:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(70% 80% at 80% 20%,#000,transparent 70%);-webkit-mask-image:radial-gradient(70% 80% at 80% 20%,#000,transparent 70%);opacity:.5;pointer-events:none}
+.keys-in{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:50px;align-items:center}
+.flow{display:grid;gap:10px}
+.flow div{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:16px;background:rgba(0,0,0,.3);border:1px solid var(--line);font-size:15px}
+.flow div i{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-family:var(--mono);font-size:12px;background:var(--surface-2);color:var(--muted);flex:none}
+.flow div.done i{background:rgba(91,227,154,.15);color:var(--ok)}
+.flow div.pay{border-color:rgba(255,155,94,.5);background:rgba(255,155,94,.1)}
+.flow div.pay i{background:var(--accent);color:#1d0f05}
+.flow small{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right}
+
+/* tech */
+.tech{padding:clamp(90px,12vw,150px) 0}
+.tech-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:50px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden}
+.tool{background:var(--bg);padding:24px;transition:background .3s;min-height:128px}
+.tool:hover{background:var(--bg-3)}
+.tool b{display:block;font-size:16px;letter-spacing:-.015em}
+.tool span{display:block;color:var(--muted);font-size:14px;margin-top:6px;line-height:1.45}
+.tool .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:12px;display:block}
+.marquee{margin-top:56px;overflow:hidden;mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.marquee-track{display:flex;gap:14px;width:max-content;animation:marq 40s linear infinite}
+.marquee-track img{width:64px;height:64px;border-radius:18px;opacity:.9}
+@keyframes marq{to{transform:translateX(-50%)}}
+
+/* final */
+.final{padding:clamp(100px,14vw,180px) 0 clamp(80px,10vw,120px);text-align:center;overflow:hidden}
+.final::before{content:"";position:absolute;left:50%;top:40%;width:900px;height:600px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(255,155,94,.22),transparent);pointer-events:none}
+.final h2{font-size:clamp(42px,7.5vw,104px);line-height:.95;letter-spacing:-.05em;font-weight:800;position:relative}
+.final .lede{margin-left:auto;margin-right:auto}
+.final .ctas{justify-content:center}
+.final .avatars{display:flex;justify-content:center;margin-bottom:34px;position:relative}
+.final .avatars img{width:60px;height:60px;border-radius:16px;margin-left:-12px;border:3px solid var(--bg);box-shadow:0 8px 20px -6px rgba(0,0,0,.6);transition:transform .3s var(--ease)}
+.final .avatars img:first-child{margin-left:0}
+.final .avatars img:hover{transform:translateY(-8px) rotate(-4deg)}
+footer{border-top:1px solid var(--line);padding:36px 0 calc(36px + env(safe-area-inset-bottom));font-size:14px;color:var(--dim)}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.foot .brand{color:var(--text)}
+.foot nav{display:flex;gap:22px;flex-wrap:wrap}
+.foot nav a{color:var(--muted);transition:color .2s}
+.foot nav a:hover{color:var(--text)}
+.disclose{margin-top:20px;font-size:12.5px;color:var(--dim);max-width:720px}
+
+/* reveal */
+.rv{opacity:0;transform:translateY(28px);transition:opacity .9s var(--ease),transform .9s var(--ease);transition-delay:var(--d,0s)}
+.rv.in{opacity:1;transform:none}
+
+/* responsive */
+@media (max-width:980px){
+  .nav-links{display:none}
+  .how-grid,.live-grid,.keys-in{grid-template-columns:1fr}
+  .how-head{position:relative;top:0}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .stat:nth-child(3){border-left:0}
+  .stat:nth-child(n+3){border-top:1px solid var(--line)}
+  .pains{grid-template-columns:1fr 1fr}
+  .pain,.pain:nth-child(4),.pain:nth-child(5){grid-column:span 1}
+  .pain:nth-child(5){grid-column:span 2}
+  .tech-grid{grid-template-columns:repeat(2,1fr)}
+  .live-copy{order:-1}
+}
+@media (max-width:720px){
+  .hero{align-items:flex-end;padding:0 0 64px;min-height:max(100svh,720px)}
+  .hero-copy{padding-top:calc(46svh)}
+  .hero h1{font-size:clamp(46px,13.5vw,64px);margin-top:18px}
+  .hero .sub{font-size:16.5px;margin-top:18px}
+  .ctas{margin-top:26px}
+  .ctas .btn{flex:1 1 auto;justify-content:center}
+  .hero-meta{gap:14px;margin-top:26px}
+  .scroll-cue{display:none}
+  .hero-fallback{right:50%;top:26%;transform:translate(50%,-50%);width:200px}
+  .team-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .agent{padding:8px;border-radius:20px}
+  .agent .ph{border-radius:14px}
+  .agent.lead{grid-column:span 2}
+  .agent.lead .ph{aspect-ratio:16/10}
+  .agent .meta{flex-direction:column;gap:6px;padding:12px 6px 4px}
+  .agent h3{font-size:17px}
+  .agent p{font-size:13px}
+  .agent .tag{order:-1;font-size:9.5px;padding:4px 8px}
+  .pains{grid-template-columns:1fr}
+  .pain,.pain:nth-child(5){grid-column:span 1}
+  .pain{padding:22px}
+  .timeline{padding-left:54px}
+  .timeline .rail{left:19px}
+  .step .node{left:-54px;width:40px;height:40px;border-radius:12px}
+  .stat{padding:24px 16px}
+  .tool{padding:18px;min-height:0}
+  .float-card{display:none}
+  .final .avatars img{width:42px;height:42px;margin-left:-8px;border-radius:13px;border-width:2px}
+  .flow small{display:none}
+  .tool span{font-size:13px}
+  .tool b{font-size:15px}
+  .tool .k{margin-bottom:8px;font-size:9.5px}
+  .nav .btn span.long{display:none}
+}
+@media (max-width:340px){
+  .tech-grid{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  .rv{opacity:1;transform:none}
+  .marquee-track{animation:none}
+}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top" aria-label="Homie home"><img src="/avatars/homie.png" alt="" width="32" height="32">Homie</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#problem">Problem</a>
+      <a href="#how">How it works</a>
+      <a href="#team">Team</a>
+      <a href="#live">Live call</a>
+      <a href="#tech">Stack</a>
+    </nav>
+    <a class="btn btn-ghost" href="/"><span><span class="long">Open </span>mission control</span></a>
+  </div>
+</header>
+
+<main id="top">
+<!-- HERO -->
+<section class="hero" id="hero">
+  <canvas id="stage" aria-hidden="true"></canvas>
+  <div class="hero-fallback" aria-hidden="true"><img src="/avatars/homie.png" alt=""></div>
+  <div class="hover-tag" id="hoverTag"><b></b><span></span></div>
+  <div class="wrap" style="width:100%">
+    <div class="hero-copy">
+      <span class="pill"><b>MHacks 2026</b>9 AI agents, one apartment</span>
+      <h1>Your person<br>in <span class="serif grad">America.</span></h1>
+      <p class="sub">Renting your first US apartment from abroad? Homie calls the leasing offices, reads every listing, negotiates the deal, sorts the <strong>no-SSN paperwork</strong>, and you only pay when you get your keys.</p>
+      <div class="ctas">
+        <a class="btn btn-primary" href="/live?role=fix&live=1"><span class="live-dot"></span>Try the live call</a>
+        <a class="btn btn-ghost" href="/">Open mission control
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      </div>
+      <div class="hero-meta">
+        <span><i></i>Live on Agentverse</span>
+        <span><i></i>@homie-usa in ASI:One</span>
+        <span><i></i>Contacts in Relay</span>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-cue">Scroll</div>
+</section>
+
+<!-- STATS -->
+<div class="band">
+  <div class="wrap stats">
+    <div class="stat rv"><div class="n">9</div><div class="l">specialist agents working one move together</div></div>
+    <div class="stat rv" style="--d:.08s"><div class="n">+1</div><div class="l">a US number offices can actually call back</div></div>
+    <div class="stat rv" style="--d:.16s"><div class="n">0 <span class="serif">SSN</span></div><div class="l">needed. Papers knows the workarounds</div></div>
+    <div class="stat rv" style="--d:.24s"><div class="n">$0</div><div class="l">until the keys are in your hand</div></div>
+  </div>
+</div>
+
+<!-- PROBLEM -->
+<section class="problem" id="problem">
+  <div class="wrap">
+    <span class="eyebrow rv">The problem</span>
+    <h2 class="h2 rv">Renting from 8,000 miles away<br>is a <span class="serif grad">wall.</span></h2>
+    <p class="lede rv">Every year, over a million international students try to sign a US lease before they land. The system was not built for them.</p>
+    <div class="pains">
+      <article class="pain rv">
+        <div class="num">01</div>
+        <h3>They can't call you back.</h3>
+        <p>Leasing offices won't dial a +91 or +86 number. You miss the callback, you miss the unit.</p>
+        <div class="fix"><img src="/avatars/calls.png" alt=""><span><b>Calls</b> phones them from a US line.</span></div>
+      </article>
+      <article class="pain rv" style="--d:.06s">
+        <div class="num">02</div>
+        <h3>Deals hide on certain days.</h3>
+        <p>Look-and-lease specials, fee waivers, end-of-month drops. You hear about them after you sign.</p>
+        <div class="fix"><img src="/avatars/negotiator.png" alt=""><span><b>Negotiator</b> asks, every time.</span></div>
+      </article>
+      <article class="pain rv" style="--d:.12s">
+        <div class="num">03</div>
+        <h3>No SSN, no lease.</h3>
+        <p>Buildings demand a US guarantor you don't have, or a year of rent up front.</p>
+        <div class="fix"><img src="/avatars/papers.png" alt=""><span><b>Papers</b> finds the no-SSN path.</span></div>
+      </article>
+      <article class="pain rv">
+        <div class="num">04</div>
+        <h3>Cashier's check only.</h3>
+        <p>Deposit due in person, by paper check, before you even have a US bank account.</p>
+        <div class="fix"><img src="/avatars/homie.png" alt=""><span><b>Homie</b> pays only when keys are handed over.</span></div>
+      </article>
+      <article class="pain rv" style="--d:.06s">
+        <div class="num">05</div>
+        <h3>Repairs go to a bot.</h3>
+        <p>Portal chatbots close tickets without anyone ever looking at the leak under your sink.</p>
+        <div class="fix"><img src="/avatars/fix.png" alt=""><span><b>Fix</b> looks at it with you, on a live video call.</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- HOW -->
+<section class="how" id="how">
+  <div class="wrap how-grid">
+    <div class="how-head">
+      <span class="eyebrow rv">How it works</span>
+      <h2 class="h2 rv">One message.<br><span class="serif grad">Nine agents</span><br>hand it off.</h2>
+      <p class="lede rv">Text Homie like you'd text a friend who lives there. The team splits the work, talks to each other, and reports back.</p>
+      <div class="chat rv">
+        <div class="chat-top"><img src="/avatars/homie.png" alt=""><div><b>Homie</b> &middot; ASI:One / Relay</div></div>
+        <div class="bubble me">Need a 1BR near North Campus, under $1,600, moving Aug 15. I'm in Pune and don't have an SSN.</div>
+        <div class="bubble them">On it. Calls is phoning three offices now, Pics is grabbing the floor plans. I'll ping you when I have real numbers.</div>
+      </div>
+    </div>
+
+    <div class="timeline" id="timeline">
+      <div class="rail"><i></i></div>
+      <div class="step">
+        <div class="node"><img src="/avatars/homie.png" alt="Homie"></div>
+        <div class="who">01 &middot; Homie</div>
+        <h3>Searches real buildings, live.</h3>
+        <p>Google Places finds every building near campus. Homie reads each website for today's prices, not last month's listing.</p>
+        <div class="log"><span class="k">places.search</span>("apartments near North Campus") <span class="d">&rarr;</span> <span class="g">14 buildings</span><br><span class="k">site.read</span> 14/14 <span class="d">&rarr;</span> <span class="o">6 under $1,600</span></div>
+      </div>
+      <div class="step">
+        <div class="node"><img src="/avatars/pics.png" alt="Pics"></div>
+        <div class="who">02 &middot; Pics</div>
+        <h3>Screenshots every listing.</h3>
+        <p>Floor plans, unit photos and the fine print, captured so you see exactly what the office sees.</p>
+      </div>
+      <div class="step">
+        <div class="node"><img src="/avatars/calls.png" alt="Calls"></div>
+        <div class="who">03 &middot; Calls</div>
+        <h3>Phones the leasing office.</h3>
+        <p>A real call over Twilio with Gemini Live voice. It always says up front that it is an AI assistant calling on your behalf.</p>
+        <div class="log"><span class="d">&gt;</span> "Hi, I'm an AI assistant calling for a student moving from India. Is the 1BR on floor 4 still open?"</div>
+      </div>
+      <div class="step">
+        <div class="node"><img src="/avatars/later.png" alt="Later"></div>
+        <div class="who">04 &middot; Later</div>
+        <h3>Office closed? It calls back.</h3>
+        <p>Later schedules the follow-up for when they open, in their timezone, while you sleep in yours.</p>
+        <div class="log"><span class="k">schedule</span> callback <span class="o">Tue 9:05am ET</span> <span class="d">(6:35pm IST)</span></div>
+      </div>
+      <div class="step">
+        <div class="node"><img src="/avatars/negotiator.png" alt="Negotiator"></div>
+        <div class="who">05 &middot; Negotiator</div>
+        <h3>Asks for the deal you'd never know about.</h3>
+        <p>Application fee waivers, the Tuesday special, a free month on a 13-month lease. It asks, politely, every time.</p>
+        <div class="log"><span class="g">&#10003;</span> app fee waived <span class="d">&middot;</span> <span class="g">&#10003;</span> $200 off first month</div>
+      </div>
+      <div class="step">
+        <div class="node"><img src="/avatars/papers.png" alt="Papers"></div>
+        <div class="who">06 &middot; Papers + Policy</div>
+        <h3>Handles the no-SSN paperwork.</h3>
+        <p>Passport, I-20 and offer letter instead of an SSN. Guarantor services if needed. Policy checks the lease against local tenant law.</p>
+      </div>
+      <div class="step">
+        <div class="node"><img src="/avatars/memory.png" alt="Memory"></div>
+        <div class="who">07 &middot; Memory</div>
+        <h3>Remembers you.</h3>
+        <p>Your budget, your move date, that you hate ground floors. Next time, nobody asks twice.</p>
+      </div>
+      <div class="step">
+        <div class="node"><img src="/avatars/fix.png" alt="Fix"></div>
+        <div class="who">08 &middot; Fix</div>
+        <h3>Sticks around after move-in.</h3>
+        <p>Something breaks? Show Fix on a live video call. It files the repair with photos and follows up until it's done.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TEAM -->
+<section class="team" id="team">
+  <div class="wrap">
+    <div class="team-head">
+      <div>
+        <span class="eyebrow rv">Meet the team</span>
+        <h2 class="h2 rv">Nine agents.<br><span class="serif grad">One move.</span></h2>
+      </div>
+      <p class="lede rv" style="max-width:420px">Each one is a Fetch.ai uAgent on Agentverse with one job it does well. Message any of them in ASI:One or Relay.</p>
+    </div>
+    <div class="team-grid" id="teamGrid"></div>
+  </div>
+</section>
+
+<!-- LIVE -->
+<section class="live" id="live">
+  <div class="wrap live-grid">
+    <div class="phone-wrap rv">
+      <div class="phone" id="phone">
+        <div class="screen">
+          <img class="poster" src="/figurines/fix/portrait.jpg" alt="Fix, Homie's repair agent, as a clay figurine on a video call">
+          <video id="figVideo" muted loop playsinline preload="metadata" poster="/figurines/fix/portrait.jpg" aria-label="Fix talking on a live video call">
+            <source src="/figurines/fix/talking.mp4" type="video/mp4">
+          </video>
+          <div class="island"></div>
+          <div class="call-top">
+            <span class="chip"><span class="live-dot"></span>Fix &middot; Live</span>
+            <span class="chip" id="callTimer">00:42</span>
+          </div>
+          <div class="pip"><img src="/photos/arbor_lofts_kitchen.jpg" alt="Your camera: the kitchen"></div>
+          <div class="caption" id="caption"><b>Fix</b><span>I can see it. Water is pooling under the sink trap.</span></div>
+          <div class="controls" aria-hidden="true">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="3"/><path d="m16 10 6-3v10l-6-3"/></svg></span>
+            <span class="end"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 9c-3.3 0-6.4.9-9 2.6-.6.4-.8 1.2-.4 1.8l1.3 2c.4.6 1.1.8 1.7.5l2.5-1.2c.5-.3.8-.8.8-1.4V11.6C10 11.2 11 11 12 11s2 .2 3.1.6v1.7c0 .6.3 1.1.8 1.4l2.5 1.2c.6.3 1.3.1 1.7-.5l1.3-2c.4-.6.2-1.4-.4-1.8C18.4 9.9 15.3 9 12 9z"/></svg></span>
+          </div>
+        </div>
+      </div>
+      <div class="float-card fc-1"><img src="/avatars/fix.png" alt=""><div><b>Repair filed</b><span>Leak, kitchen sink &middot; 3 photos</span></div></div>
+      <div class="float-card fc-2"><img src="/avatars/policy.png" alt=""><div><b>Policy</b><span>Landlord must respond in 24h</span></div></div>
+    </div>
+    <div class="live-copy">
+      <span class="eyebrow rv">Live video agent</span>
+      <h2 class="h2 rv">Point your camera.<br><span class="serif grad">Fix looks.</span></h2>
+      <p class="lede rv">Instead of a portal bot, you get a face. Fix is a clay figurine on a real-time video call that sees the broken thing through your camera, talks you through it, and files the repair for you.</p>
+      <div class="mode rv" role="group" aria-label="Figurine state">
+        <button type="button" data-src="/figurines/fix/talking.mp4" aria-pressed="true">Talking</button>
+        <button type="button" data-src="/figurines/fix/listening.mp4" aria-pressed="false">Listening</button>
+      </div>
+      <ul class="feats">
+        <li class="rv"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div><b>Sees what you see</b><span>Gemini Live watches your camera feed and reasons about it in real time.</span></div></li>
+        <li class="rv"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span><div><b>Files the ticket for you</b><span>With photos and a clear description, then chases it until someone shows up.</span></div></li>
+        <li class="rv"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><div><b>Knows your rights</b><span>Policy backs every request with the local tenant law on response times.</span></div></li>
+      </ul>
+      <div class="ctas rv"><a class="btn btn-primary" href="/live?role=fix&live=1"><span class="live-dot"></span>Try the live call</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- KEYS -->
+<section class="keys">
+  <div class="wrap">
+    <div class="keys-card rv">
+      <div class="keys-in">
+        <div>
+          <span class="eyebrow">Pay at keys</span>
+          <h2 class="h2">You pay when<br>you get your <span class="serif grad">keys.</span></h2>
+          <p class="lede">No upfront fee, no subscription. Payment runs on the Fetch.ai Payment Protocol and is verified on-chain, so it only releases once the move actually happens.</p>
+        </div>
+        <div class="flow">
+          <div class="done"><i>&#10003;</i>Apartment found and negotiated<small>Homie</small></div>
+          <div class="done"><i>&#10003;</i>Lease signed, no SSN<small>Papers</small></div>
+          <div class="done"><i>&#10003;</i>Keys in your hand<small>you</small></div>
+          <div class="pay"><i>$</i>Payment released<small>Fetch Payment<br>Protocol &middot; on-chain</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH -->
+<section class="tech" id="tech">
+  <div class="wrap">
+    <span class="eyebrow rv">Under the hood</span>
+    <h2 class="h2 rv">Real calls. Real buildings.<br><span class="serif grad">Real agents.</span></h2>
+    <div class="tech-grid rv">
+      <div class="tool"><span class="k">Agents</span><b>Fetch.ai uAgents</b><span>Nine agents, one job each, talking over the agent protocol.</span></div>
+      <div class="tool"><span class="k">Hosting</span><b>Agentverse</b><span>Every agent registered, discoverable and always on.</span></div>
+      <div class="tool"><span class="k">Front door</span><b>ASI:One</b><span>Find the team as @homie-usa and just start chatting.</span></div>
+      <div class="tool"><span class="k">Messenger</span><b>Relay</b><span>Each agent shows up as a contact you can text.</span></div>
+      <div class="tool"><span class="k">Reasoning</span><b>Gemini on Vertex AI</b><span>Reads building sites, plans the hunt, writes the asks.</span></div>
+      <div class="tool"><span class="k">Voice + video</span><b>Gemini Live</b><span>Real-time voice on phone calls and vision on video calls.</span></div>
+      <div class="tool"><span class="k">Voices</span><b>ElevenLabs</b><span>Natural, distinct voices for every agent.</span></div>
+      <div class="tool"><span class="k">Animation</span><b>Veo</b><span>Brings the clay figurines to life on the video call.</span></div>
+      <div class="tool"><span class="k">Memory</span><b>Mapi</b><span>Long-term memory so Homie remembers you.</span></div>
+      <div class="tool"><span class="k">Search</span><b>Google Places</b><span>Live search over real buildings near your campus.</span></div>
+      <div class="tool"><span class="k">Telephony</span><b>Twilio</b><span>Real outbound calls to real leasing offices.</span></div>
+      <div class="tool"><span class="k">Payments</span><b>Fetch Payment Protocol</b><span>Pay at keys, verified on-chain.</span></div>
+    </div>
+  </div>
+  <div class="marquee" aria-hidden="true"><div class="marquee-track" id="marquee"></div></div>
+</section>
+
+<!-- FINAL -->
+<section class="final">
+  <div class="wrap">
+    <div class="avatars rv" id="finalAvatars"></div>
+    <h2 class="rv">Land with a home<br><span class="serif grad">already waiting.</span></h2>
+    <p class="lede rv">Message @homie-usa in ASI:One, open the mission control, or jump on a live call with Fix right now.</p>
+    <div class="ctas rv">
+      <a class="btn btn-primary" href="/live?role=fix&live=1"><span class="live-dot"></span>Try the live call</a>
+      <a class="btn btn-ghost" href="https://asi1.ai" target="_blank" rel="noopener">Chat on ASI:One</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a class="brand" href="#top"><img src="/avatars/homie.png" alt="" width="32" height="32">Homie</a>
+      <nav aria-label="Footer">
+        <a href="/">Mission control</a>
+        <a href="/live?role=fix&live=1">Live call</a>
+        <a href="https://asi1.ai" target="_blank" rel="noopener">ASI:One (@homie-usa)</a>
+        <a href="https://github.com/kbhatnagar1506/homie" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+    <p class="disclose">Built at MHacks 2026. Homie always identifies itself as an AI assistant on every call it makes. Your person in America.</p>
+  </div>
+</footer>
+
+<script>
+// ---------- shared data ----------
+window.HOMIE_TEAM = [
+  {id:"homie",name:"Homie",role:"The lead. Talks to you, runs the team, gets you the keys.",tag:"Lead",c:"232,146,90"},
+  {id:"calls",name:"Calls",role:"Phones leasing offices from a US line, always disclosed as AI.",tag:"Voice",c:"111,168,220"},
+  {id:"negotiator",name:"Negotiator",role:"Asks for the fee waivers and specials nobody mentions.",tag:"Deals",c:"214,120,120"},
+  {id:"papers",name:"Papers",role:"No SSN? Finds the paperwork path that gets you approved.",tag:"Docs",c:"190,160,110"},
+  {id:"fix",name:"Fix",role:"Handles repairs on a live video call through your camera.",tag:"Repairs",c:"120,180,150"},
+  {id:"policy",name:"Policy",role:"Knows local tenant rights and checks every lease.",tag:"Rights",c:"150,140,210"},
+  {id:"pics",name:"Pics",role:"Screenshots listings, floor plans and the fine print.",tag:"Visuals",c:"220,170,90"},
+  {id:"memory",name:"Memory",role:"Remembers your budget, dates and dealbreakers.",tag:"Memory",c:"200,140,190"},
+  {id:"later",name:"Later",role:"Schedules callbacks when offices are closed.",tag:"Timing",c:"120,170,200"}
+];
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// team grid
+(function(){
+  const g = document.getElementById("teamGrid");
+  HOMIE_TEAM.forEach((a,i)=>{
+    const el = document.createElement("article");
+    el.className = "agent rv" + (i===0?" lead":"");
+    el.style.setProperty("--d",(i%3)*0.06+"s");
+    el.style.setProperty("--c",a.c);
+    el.dataset.id = a.id;
+    el.innerHTML = '<div class="ph"><img src="/avatars/'+a.id+'.png" alt="'+a.name+', Homie\'s '+a.tag.toLowerCase()+' agent" loading="lazy" width="512" height="512"></div>'+
+      '<div class="meta"><div><h3>'+a.name+'</h3><p>'+a.role+'</p></div><span class="tag">'+a.tag+'</span></div>';
+    g.appendChild(el);
+    // sample real background color from avatar corner
+    const img = new Image(); img.src = "/avatars/"+a.id+".png";
+    img.onload = ()=>{ try{ const c=document.createElement("canvas"); c.width=c.height=8; const x=c.getContext("2d"); x.drawImage(img,0,0,8,8); const d=x.getImageData(1,1,1,1).data; el.style.setProperty("--c",d[0]+","+d[1]+","+d[2]);}catch(e){} };
+    if(!reduce && matchMedia("(hover:hover)").matches){
+      el.addEventListener("pointermove",e=>{const r=el.getBoundingClientRect();const x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;el.style.transform="rotateX("+(-y*8)+"deg) rotateY("+(x*10)+"deg) translateY(-4px)";});
+      el.addEventListener("pointerleave",()=>{el.style.transform="";});
+    }
+  });
+  const mq = document.getElementById("marquee");
+  const fa = document.getElementById("finalAvatars");
+  const ids = HOMIE_TEAM.map(a=>a.id);
+  [...ids,...ids,...ids,...ids].forEach(id=>{const im=new Image();im.src="/avatars/"+id+".png";im.alt="";im.loading="lazy";mq.appendChild(im);});
+  ids.forEach(id=>{const im=new Image();im.src="/avatars/"+id+".png";im.alt=id;im.loading="lazy";fa.appendChild(im);});
+})();
+
+// reveal
+(function(){
+  const els = document.querySelectorAll(".rv");
+  if(reduce || !("IntersectionObserver" in window)){els.forEach(e=>e.classList.add("in"));return;}
+  const io = new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target);}}),{rootMargin:"0px 0px -8% 0px",threshold:.08});
+  els.forEach(e=>io.observe(e));
+})();
+
+// nav + timeline progress
+(function(){
+  const nav = document.getElementById("nav");
+  const tl = document.getElementById("timeline");
+  const rail = tl.querySelector(".rail i");
+  const steps = [...tl.querySelectorAll(".step")];
+  let ticking=false;
+  function update(){
+    ticking=false;
+    nav.classList.toggle("scrolled", scrollY>20);
+    const r = tl.getBoundingClientRect(), vh = innerHeight;
+    const p = Math.min(1,Math.max(0,(vh*.6 - r.top)/r.height));
+    rail.style.setProperty("--p",p.toFixed(4));
+    steps.forEach(s=>{const sr=s.getBoundingClientRect(); s.classList.toggle("on", sr.top < vh*.62);});
+  }
+  addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(update);}},{passive:true});
+  addEventListener("resize",update);
+  update();
+})();
+
+// pain spotlight
+document.querySelectorAll(".pain").forEach(p=>p.addEventListener("pointermove",e=>{const r=p.getBoundingClientRect();p.style.setProperty("--mx",(e.clientX-r.left)+"px");p.style.setProperty("--my",(e.clientY-r.top)+"px");}));
+
+// live video section
+(function(){
+  const v = document.getElementById("figVideo");
+  const btns = document.querySelectorAll(".mode button");
+  const cap = document.getElementById("caption").querySelector("span");
+  const capBox = document.getElementById("caption");
+  const lines = {
+    talking:["I can see it. Water is pooling under the sink trap.","Turn the shutoff valve on the left, clockwise.","I've filed the repair with three photos. Maintenance is notified.","Policy says they owe you a response within 24 hours."],
+    listening:["Listening...","Go ahead, show me where it's coming from.","Take your time. I can see the cabinet now."]
+  };
+  let mode="talking", li=0;
+  function setMode(m,src){
+    mode=m; li=0;
+    btns.forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.src===src)));
+    v.src = src; v.load(); if(!reduce) v.play().catch(()=>{});
+    capBox.querySelector("b").textContent = m==="talking"?"Fix":"You";
+    cap.textContent = lines[m][0];
+  }
+  btns.forEach(b=>b.addEventListener("click",()=>setMode(b.textContent.trim().toLowerCase(), b.dataset.src)));
+  if(!reduce){
+    setInterval(()=>{li=(li+1)%lines[mode].length;capBox.style.opacity=0;setTimeout(()=>{cap.textContent=lines[mode][li];capBox.style.opacity=1;},350);},3400);
+  }
+  let secs=42; const t=document.getElementById("callTimer");
+  setInterval(()=>{secs++;t.textContent=String(Math.floor(secs/60)).padStart(2,"0")+":"+String(secs%60).padStart(2,"0");},1000);
+  const io = new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ if(!reduce) v.play().catch(()=>{}); } else v.pause(); }),{threshold:.2});
+  io.observe(document.getElementById("phone"));
+})();
+</script>
+
+<script type="module">
+import * as THREE from "three";
+
+const canvas = document.getElementById("stage");
+const hero = document.getElementById("hero");
+const tag = document.getElementById("hoverTag");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const TEAM = window.HOMIE_TEAM;
+
+let renderer;
+try{
+  renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true, powerPreference:"high-performance"});
+}catch(e){ console.warn("WebGL unavailable, using fallback"); }
+
+if(renderer){
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(0x000000,0);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38,1,0.1,100);
+  camera.position.set(0,3.4,11);
+  const root = new THREE.Group(); scene.add(root);
+  const ring = new THREE.Group(); root.add(ring);
+
+  // ---------- card shader ----------
+  const cardVS = "varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}";
+  const cardFS = "uniform sampler2D map; uniform vec3 uGlow; uniform float uBoost; uniform float uReady; uniform float uFade; varying vec2 vUv; float sdRB(vec2 p, vec2 b, float r){ vec2 q=abs(p)-b+r; return length(max(q,0.0))+min(max(q.x,q.y),0.0)-r; } void main(){ vec2 p = vUv-0.5; float d = sdRB(p, vec2(0.5), 0.16); float a = 1.0 - smoothstep(-0.006, 0.0, d); if(a < 0.01) discard; vec3 col = mix(uGlow*0.5, texture2D(map, vUv).rgb, uReady); float rim = smoothstep(-0.05, 0.0, d); col += uGlow * rim * (0.35 + uBoost*0.9); col += vec3(1.0) * smoothstep(0.1, 0.5, p.y - p.x*0.4) * 0.07; col *= uFade; gl_FragColor = vec4(col, a); }";
+  const glowFS = "uniform vec3 uGlow; uniform float uBoost; uniform float uFade; varying vec2 vUv; void main(){ float d = length(vUv-0.5)*2.0; float g = pow(max(0.0,1.0-d),2.2); float k = g*(0.5+uBoost*1.1)*uFade; gl_FragColor = vec4(uGlow*k, k*0.35); }";
+
+  const ADD = {blending:THREE.CustomBlending, blendEquation:THREE.AddEquation, blendSrc:THREE.OneFactor, blendDst:THREE.OneFactor, blendSrcAlpha:THREE.OneFactor, blendDstAlpha:THREE.OneMinusSrcAlphaFactor};
+  const loader = new THREE.TextureLoader();
+  const cardGeo = new THREE.PlaneGeometry(1,1);
+  const agents = [];
+
+  function labelTexture(name){
+    const c = document.createElement("canvas"); c.width=256; c.height=64;
+    const x = c.getContext("2d");
+    x.font = "600 30px Inter, system-ui, sans-serif"; x.textAlign="center"; x.textBaseline="middle";
+    const w = x.measureText(name).width + 34;
+    x.fillStyle="rgba(10,10,14,0.72)"; x.strokeStyle="rgba(255,255,255,0.16)"; x.lineWidth=2;
+    const rx=(256-w)/2; x.beginPath(); x.roundRect(rx,10,w,44,22); x.fill(); x.stroke();
+    x.fillStyle="#f5f2ed"; x.fillText(name,128,33);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy=4; return t;
+  }
+
+  TEAM.forEach((a,i)=>{
+    const col = new THREE.Color("rgb("+a.c+")");
+    const uniforms = {map:{value:null}, uGlow:{value:new THREE.Vector3(col.r,col.g,col.b)}, uBoost:{value:0}, uReady:{value:0}, uFade:{value:1}};
+    const mat = new THREE.ShaderMaterial({uniforms, vertexShader:cardVS, fragmentShader:cardFS, transparent:true});
+    const mesh = new THREE.Mesh(cardGeo, mat);
+    const glowMat = new THREE.ShaderMaterial({uniforms:{uGlow:uniforms.uGlow,uBoost:uniforms.uBoost,uFade:uniforms.uFade}, vertexShader:cardVS, fragmentShader:glowFS, transparent:true, depthWrite:false, ...ADD});
+    const glow = new THREE.Mesh(cardGeo, glowMat); glow.position.z=-0.05; glow.scale.setScalar(2.4); glow.renderOrder=-1;
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(1,0.25), new THREE.MeshBasicMaterial({map:labelTexture(a.name), transparent:true, depthWrite:false}));
+    label.position.y = -0.68;
+    const holder = new THREE.Group(); holder.add(glow, mesh, label);
+    (i===0 ? root : ring).add(holder);
+    loader.load("/avatars/"+a.id+".png", tex=>{
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      uniforms.map.value = tex;
+      // sample true bg color for glow
+      try{ const c=document.createElement("canvas"); c.width=c.height=8; const x=c.getContext("2d"); x.drawImage(tex.image,0,0,8,8); const d=x.getImageData(1,1,1,1).data; uniforms.uGlow.value.set(d[0]/255,d[1]/255,d[2]/255); }catch(e){}
+      const start=performance.now();
+      (function fade(){ const k=Math.min(1,(performance.now()-start)/700); uniforms.uReady.value=k; if(reduce) requestRender(); if(k<1) requestAnimationFrame(fade); })();
+    });
+    agents.push({a, i, holder, mesh, uniforms, boost:0, hover:0, scaleBase: i===0?2.05:1.2, world:new THREE.Vector3()});
+  });
+  hero.classList.add("gl-on");
+
+  // ---------- connection lines ----------
+  const N = agents.length-1;
+  const lineGeo = new THREE.BufferGeometry();
+  const linePos = new Float32Array(N*2*3);
+  lineGeo.setAttribute("position", new THREE.BufferAttribute(linePos,3));
+  const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({color:0xffb27a, transparent:true, opacity:0.13, depthWrite:false}));
+  root.add(lines);
+
+  // ---------- message pulses (trails) ----------
+  const MAXP = 14, TAIL = 28;
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(MAXP*TAIL*3), pCol = new Float32Array(MAXP*TAIL*3), pA = new Float32Array(MAXP*TAIL), pS = new Float32Array(MAXP*TAIL);
+  pGeo.setAttribute("position", new THREE.BufferAttribute(pPos,3));
+  pGeo.setAttribute("aC", new THREE.BufferAttribute(pCol,3));
+  pGeo.setAttribute("aA", new THREE.BufferAttribute(pA,1));
+  pGeo.setAttribute("aS", new THREE.BufferAttribute(pS,1));
+  const ptVS = "attribute float aA; attribute float aS; attribute vec3 aC; varying float vA; varying vec3 vC; uniform float uPR; void main(){ vA=aA; vC=aC; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize = aS*uPR*(60.0/-mv.z); gl_Position=projectionMatrix*mv; }";
+  const ptFS = "varying float vA; varying vec3 vC; void main(){ float d=length(gl_PointCoord-0.5)*2.0; float g=pow(max(0.0,1.0-d),1.8); gl_FragColor=vec4(vC*g*vA, g*vA*0.4); }";
+  const ptMat = new THREE.ShaderMaterial({uniforms:{uPR:{value:renderer.getPixelRatio()}}, vertexShader:ptVS, fragmentShader:ptFS, transparent:true, depthWrite:false, ...ADD});
+  const pulses = new THREE.Points(pGeo, ptMat); pulses.frustumCulled=false; root.add(pulses);
+  const active = [];
+  function spawn(now){
+    if(active.length>=MAXP) return;
+    let from, to;
+    const r = Math.random();
+    if(r<0.45){ from=0; to=1+Math.floor(Math.random()*N); }
+    else if(r<0.8){ from=1+Math.floor(Math.random()*N); to=0; }
+    else { from=1+Math.floor(Math.random()*N); do{to=1+Math.floor(Math.random()*N);}while(to===from); }
+    active.push({from,to,t0:now,dur:1.4+Math.random()*1.1,lift:(Math.random()*.8+.6)*(Math.random()<.5?-1:1)});
+  }
+
+  // ---------- dust ----------
+  const DUST = 700;
+  const dGeo = new THREE.BufferGeometry();
+  const dPos = new Float32Array(DUST*3), dA = new Float32Array(DUST), dS = new Float32Array(DUST), dC = new Float32Array(DUST*3);
+  for(let i=0;i<DUST;i++){
+    const rr = 3+Math.random()*12, th=Math.random()*Math.PI*2;
+    dPos[i*3]=Math.cos(th)*rr; dPos[i*3+1]=(Math.random()-.5)*9; dPos[i*3+2]=Math.sin(th)*rr-4;
+    dA[i]=0.15+Math.random()*0.5; dS[i]=0.6+Math.random()*1.6;
+    const warm = Math.random()<.6; dC[i*3]=warm?1:.6; dC[i*3+1]=warm?.75:.75; dC[i*3+2]=warm?.55:1;
+  }
+  dGeo.setAttribute("position", new THREE.BufferAttribute(dPos,3));
+  dGeo.setAttribute("aA", new THREE.BufferAttribute(dA,1));
+  dGeo.setAttribute("aS", new THREE.BufferAttribute(dS,1));
+  dGeo.setAttribute("aC", new THREE.BufferAttribute(dC,3));
+  const dust = new THREE.Points(dGeo, ptMat); scene.add(dust);
+
+  // ---------- orbit ring (visual ellipse) ----------
+  const ringLine = new THREE.Mesh(new THREE.RingGeometry(3.98,4.02,160), new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.06, side:THREE.DoubleSide, depthWrite:false}));
+  ringLine.rotation.x = -Math.PI/2; ring.add(ringLine);
+  const ringLine2 = ringLine.clone(); ringLine2.scale.setScalar(1.45); ringLine2.material = ringLine.material.clone(); ringLine2.material.opacity=0.03; ring.add(ringLine2);
+
+  // ---------- layout ----------
+  let R = 4, layout = {x:0,y:0,s:1};
+  function resize(){
+    const w = hero.clientWidth, h = hero.clientHeight;
+    renderer.setSize(w,h,false);
+    camera.aspect = w/h; camera.updateProjectionMatrix();
+    const dist = camera.position.length();
+    const visH = 2*dist*Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+    const visW = visH*camera.aspect;
+    if(w>=980){ // desktop: orbit on the right
+      R=4; const span = 2*R+1.6;
+      layout.s = Math.min(1.0,(visW*0.47)/span, (visH*0.82)/7);
+      layout.x = visW*0.24; layout.y = 0.05;
+    }else if(w>720){ // tablet
+      R=3.8; layout.s=Math.min(0.9,(visW*0.9)/(2*R+1.6)); layout.x=visW*0.12; layout.y=0.6;
+    }else{ // phone: orbit in upper half
+      R=3.0; layout.s=(visW*0.84)/(2*R+1.4); layout.x=0; layout.y=visH*0.3;
+    }
+    ringLine.scale.setScalar(R/4); ringLine2.scale.setScalar(R/4*1.45);
+    root.position.set(layout.x, layout.y, 0); root.scale.setScalar(layout.s);
+    ptMat.uniforms.uPR.value = renderer.getPixelRatio()*Math.max(0.6,layout.s);
+    requestRender();
+  }
+  new ResizeObserver(resize).observe(hero);
+
+  // ---------- interaction ----------
+  const mouse = {x:0,y:0,tx:0,ty:0}, ndc = new THREE.Vector2(9,9);
+  const ray = new THREE.Raycaster();
+  let hovered = null;
+  hero.addEventListener("pointermove",e=>{
+    const r = hero.getBoundingClientRect();
+    mouse.tx = ((e.clientX-r.left)/r.width-.5)*2; mouse.ty = ((e.clientY-r.top)/r.height-.5)*2;
+    ndc.set(mouse.tx, -mouse.ty);
+    if(reduce) requestRender();
+  },{passive:true});
+  hero.addEventListener("pointerleave",()=>{mouse.tx=mouse.ty=0; ndc.set(9,9);});
+  hero.addEventListener("click",()=>{
+    if(!hovered) return;
+    const card = document.querySelector('.agent[data-id="'+hovered.a.id+'"]');
+    if(card){ card.scrollIntoView({behavior:reduce?"auto":"smooth",block:"center"}); card.animate([{boxShadow:"0 0 0 0 rgba(255,155,94,0)"},{boxShadow:"0 0 0 3px rgba(255,155,94,.9)"},{boxShadow:"0 0 0 0 rgba(255,155,94,0)"}],{duration:1600,delay:500}); }
+  });
+
+  // ---------- loop ----------
+  const clock = new THREE.Clock();
+  let t = reduce ? 1.3 : 0, visible = true, needs = true, lastSpawn = 0;
+  function requestRender(){ needs = true; if(reduce) requestAnimationFrame(frame); }
+  const tmp = new THREE.Vector3(), a3 = new THREE.Vector3(), b3 = new THREE.Vector3(), c3 = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  function bez(p0,p1,p2,u,out){ const k=1-u; return out.set(k*k*p0.x+2*k*u*p1.x+u*u*p2.x, k*k*p0.y+2*k*u*p1.y+u*u*p2.y, k*k*p0.z+2*k*u*p1.z+u*u*p2.z); }
+
+  function frame(){
+    if(!reduce) requestAnimationFrame(frame);
+    if(!visible && !reduce) return;
+    const dt = Math.min(clock.getDelta(), 0.05);
+    if(!reduce) t += dt;
+    mouse.x += (mouse.tx-mouse.x)*0.05; mouse.y += (mouse.ty-mouse.y)*0.05;
+
+    // camera parallax
+    camera.position.x = mouse.x*0.9; camera.position.y = 3.4 - mouse.y*0.6;
+    camera.lookAt(layout.x*0.12, layout.y*0.3, 0);
+
+    ring.rotation.z = 0.10 + mouse.x*0.04;
+    ring.rotation.x = 0.12 + mouse.y*0.05;
+
+    // positions
+    agents.forEach((ag,idx)=>{
+      if(idx===0){
+        ag.holder.position.set(0, Math.sin(t*0.9)*0.08, 0.2);
+      }else{
+        const ang = (idx-1)/N*Math.PI*2 + t*0.09;
+        ag.holder.position.set(Math.cos(ang)*R, Math.sin(t*1.1+idx)*0.12 + 0.15, Math.sin(ang)*R);
+      }
+      ag.holder.quaternion.copy(camera.quaternion);
+      if(ag.holder.parent===ring){ // undo ring tilt so cards face camera
+        ag.holder.quaternion.premultiply(tmpQ.copy(ring.quaternion).invert());
+      }
+      ag.boost *= reduce ? 0 : 0.95;
+      ag.hover += ((hovered===ag?1:0)-ag.hover)*0.15;
+      ag.uniforms.uBoost.value = Math.min(1.2, ag.boost + ag.hover*0.6);
+      const s = ag.scaleBase*(1+ag.boost*0.06+ag.hover*0.08);
+      ag.holder.scale.setScalar(s);
+      ag.holder.getWorldPosition(ag.world);
+      // depth fade for back cards
+      if(idx>0){ root.worldToLocal(v.copy(ag.world)); ag.uniforms.uFade.value = THREE.MathUtils.clamp(0.62 + (v.z/R)*0.38 + 0.2, 0.5, 1.0); }
+    });
+
+    // lines from center to each
+    const c0 = root.worldToLocal(a3.copy(agents[0].world));
+    for(let i=1;i<agents.length;i++){
+      root.worldToLocal(b3.copy(agents[i].world));
+      linePos.set([c0.x,c0.y,c0.z,b3.x,b3.y,b3.z],(i-1)*6);
+    }
+    lineGeo.attributes.position.needsUpdate = true;
+
+    // pulses
+    if(!reduce && t-lastSpawn > 0.32){ spawn(t); lastSpawn=t; }
+    pA.fill(0);
+    for(let k=active.length-1;k>=0;k--){
+      const m = active[k]; const u = (t-m.t0)/m.dur;
+      if(u>1.25){ if(!m.hit){} active.splice(k,1); continue; }
+      if(u>=1 && !m.hit){ m.hit=true; agents[m.to].boost = 1; }
+    }
+    if(reduce && active.length===0){ // static frame: draw a few frozen trails
+      [[0,2,.55],[3,0,.7],[0,6,.4],[5,7,.6],[0,8,.8]].forEach(([f,to,u])=>active.push({from:f,to,t0:t-u*2,dur:2,lift:.9,frozen:true}));
+    }
+    active.forEach((m,slot)=>{
+      if(slot>=MAXP) return;
+      const p0 = root.worldToLocal(a3.copy(agents[m.from].world));
+      const p2 = root.worldToLocal(b3.copy(agents[m.to].world));
+      c3.addVectors(p0,p2).multiplyScalar(.5); c3.y += m.lift; c3.z += 1.0;
+      const u = (t-m.t0)/m.dur;
+      const col = agents[m.from].uniforms.uGlow.value;
+      for(let j=0;j<TAIL;j++){
+        const uu = u - j*0.018;
+        const idx = slot*TAIL+j;
+        if(uu<0||uu>1){ pA[idx]=0; continue; }
+        bez(p0,c3,p2,uu,tmp);
+        pPos[idx*3]=tmp.x; pPos[idx*3+1]=tmp.y; pPos[idx*3+2]=tmp.z;
+        const f = 1-j/TAIL;
+        pA[idx] = f*f*(j===0?1.4:0.9);
+        pS[idx] = j===0? 7.5 : 4.5*f+0.8;
+        const w = j===0?0.65:0.15;
+        pCol[idx*3]=col.x*(1-w)+w; pCol[idx*3+1]=col.y*(1-w)+w; pCol[idx*3+2]=col.z*(1-w)+w;
+      }
+    });
+    pGeo.attributes.position.needsUpdate = pGeo.attributes.aA.needsUpdate = pGeo.attributes.aS.needsUpdate = pGeo.attributes.aC.needsUpdate = true;
+
+    dust.rotation.y = t*0.015; dust.position.y = Math.sin(t*0.2)*0.1;
+
+    // hover pick
+    if(ndc.x<5){
+      ray.setFromCamera(ndc, camera);
+      const hits = ray.intersectObjects(agents.map(a=>a.mesh), false);
+      const ag = hits.length ? agents.find(a=>a.mesh===hits[0].object) : null;
+      if(ag!==hovered){ hovered=ag; canvas.style.cursor = ag?"pointer":""; hero.style.cursor = ag?"pointer":""; }
+    }else if(hovered){ hovered=null; hero.style.cursor=""; }
+    if(hovered){
+      v.copy(hovered.world).project(camera);
+      tag.style.left = ((v.x+1)/2*hero.clientWidth)+"px";
+      tag.style.top = ((1-v.y)/2*hero.clientHeight - 40*hovered.holder.scale.x)+"px";
+      if(tag.dataset.id!==hovered.a.id){ tag.dataset.id=hovered.a.id; tag.querySelector("b").textContent=hovered.a.name; tag.querySelector("span").textContent=hovered.a.role; }
+      tag.classList.add("on");
+    }else tag.classList.remove("on");
+
+    renderer.render(scene,camera);
+    needs=false;
+  }
+  const tmpQ = new THREE.Quaternion();
+  resize();
+  new IntersectionObserver(es=>{visible = es[0].isIntersecting;},{threshold:0}).observe(hero);
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) clock.getDelta(); });
+  frame();
+}
+</script>
+</body>
+</html>

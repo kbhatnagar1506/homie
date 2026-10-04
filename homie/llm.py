@@ -72,7 +72,8 @@ async def complete_text(system: str, messages: list[dict], fallback: str = "") -
 INTENT_PROMPT = """Extract an apartment request into JSON with keys:
 intent ("search" | "repair" | "policy" | "status" | "other"; "policy" means a question about a lease, deposit,
 tenant rights, landlord rules or the law), city, area (neighborhood + city, e.g. \"downtown Atlanta, GA\"), move_in (string), beds (int; 0 for a studio; null if not stated),
-max_rent (int), no_ssn (bool), require_free_month (bool), fee_cap (int), issue (string, repairs only).
+max_rent (int), no_ssn (bool), require_free_month (bool), fee_cap (int), issue (string, repairs only),
+building (string: a specific building or complex they named, e.g. "The Mix"), url (a building website if given).
 Use null for anything not stated. Reply with JSON only."""
 
 

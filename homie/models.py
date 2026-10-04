@@ -146,3 +146,19 @@ class TaskDue(Model):
     kind: str = ""
     text: str = ""
     payload: dict = {}
+
+
+class ScoutRequest(Model):
+    request_id: str = ""
+    user: str = ""
+    building_id: str = ""
+    url: str = ""
+    beds: int | None = None
+
+
+class ScoutResult(Model):
+    request_id: str = ""
+    user: str = ""
+    facts: dict = {}
+    shots: list[str] = []
+    pages: int = 0

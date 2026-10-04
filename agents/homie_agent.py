@@ -26,11 +26,11 @@ from uagents_core.contrib.protocols.payment import (
     payment_protocol_spec,
 )
 
-from agents.specialists import caller, later, memory, negotiator, paperwork, pictures, policy, repairs
+from agents.specialists import caller, later, memory, scout, negotiator, paperwork, pictures, policy, repairs
 from homie import hub_client as hub
 from homie import mapi
 from homie.config import PUBLIC_URL, ROOT, env, seed
-from homie.buildings import BUILDINGS, use
+from homie.buildings import BUILDINGS, can_call_now, use
 from homie.schedule import TZ, human, next_open
 from homie.llm import _beds, parse_intent
 from homie.places import search_apartments
@@ -43,6 +43,8 @@ from homie.models import (
     NegotiateResult,
     PaperworkRequest,
     PaperworkResult,
+    ScoutRequest,
+    ScoutResult,
     ScheduleRequest,
     ScheduleResult,
     TaskDue,
@@ -207,6 +209,12 @@ async def start_search(ctx: Context, sender: str, req: dict) -> None:
 
 async def handle_search(ctx: Context, sender: str, req: dict) -> None:
     ctx.storage.set(f"lastreq:{sender}", {k: v for k, v in req.items() if not k.startswith("_")})
+    import re as _re
+
+    link = _re.search(r"https?://\S+|\b[\w-]+\.(com|net|org|apartments|life)\b", req.get("_text", ""))
+    if req.get("building") or req.get("url") or link:
+        await handle_building(ctx, sender, req, req.get("url") or (link.group(0) if link else ""))
+        return
     area = req.get("area") or req.get("city") or env("DEFAULT_AREA", "downtown Atlanta, GA")
     budget = req.get("max_rent")
     beds = req.get("beds") if req.get("beds") is not None else 1
@@ -256,6 +264,110 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
     if unanswered:
         await schedule_retry(ctx, sender, req, unanswered, target=min(o["price"] for o in offers))
     await run_offers(ctx, sender, req, offers)
+
+
+async def handle_building(ctx: Context, sender: str, req: dict, url: str) -> None:
+    """'Get me an apartment at The Mix': the whole team goes deep on one building."""
+    from homie.events import team_post
+
+    name_hint = req.get("building") or url
+    area = req.get("area") or req.get("city") or env("DEFAULT_AREA", "downtown Atlanta, GA")
+    beds = req.get("beds") if req.get("beds") is not None else 1
+    label = "studio" if beds == 0 else f"{beds}-bedroom"
+    await hub.post("/api/reset", {"request": {**req, "city": area}, "buildings": []})
+    for s_ in STEPS:
+        await hub.step(s_, "todo")
+    await hub.step("find", "active", f"Finding {name_hint}")
+    await say(ctx, sender, f"On it 🏠 Going all in on {name_hint} for a {label}. The whole team's on this one.")
+
+    # 1. Find the building (Google Places), matching the website if they gave one.
+    found = []
+    try:
+        found = await search_apartments(f"{name_hint} {area}", limit=5)
+    except Exception as e:
+        ctx.logger.error(f"Places lookup failed: {e}")
+    domain = _domain(url)
+    building = next((b for b in found if domain and domain in _domain(b.get("website") or "")), None) or (found[0] if found else None)
+    if building is None and url:
+        building = {"id": _domain(url).split(".")[0] or "target", "name": name_hint, "website": url if url.startswith("http") else f"https://{url}",
+                    "address": "", "phone": "", "real": True}
+    if building is None:
+        await say(ctx, sender, f"I couldn't find {name_hint}. Send me their website and I'll go from there.", end=True)
+        return
+    if url and not building.get("website"):
+        building["website"] = url if url.startswith("http") else f"https://{url}"
+    use([building])
+    await hub.post("/api/buildings", {"buildings": [building]})
+    await hub.step("find", "done", f"{building['name']} · {building.get('address', '')}")
+
+    # 2. Scout reads every page of their site; Pics screenshots it meanwhile.
+    await hub.step("offers", "active", "Scout is reading their whole website")
+    pics_task = asyncio.ensure_future(ask(ctx, pictures.address, PicturesRequest(building_ids=[building["id"]]), 120))
+    res = await ask(ctx, scout.address, ScoutRequest(building_id=building["id"], url=building.get("website") or "", beds=beds), 240)
+    ctx.logger.info(f"Scout answer: {type(res).__name__} {len((getattr(res, 'facts', None) or {}).get('floor_plans') or [])} plans")
+    facts = res.facts if isinstance(res, ScoutResult) else {}
+    plans = [p for p in (facts.get("floor_plans") or []) if p.get("price")]
+    match = [p for p in plans if p.get("beds") == beds] or plans
+    budget = req.get("max_rent")
+    fits = sorted([p for p in match if not budget or p["price"] <= budget] or match, key=lambda p: p["price"])
+    if isinstance(res, ScoutResult) and res.shots:
+        team_post("pics", f"Here's {building['name']}'s site and floor plans, straight from their website.", res.shots[:3])
+    if not fits:
+        await hub.step("offers", "blocked", "No prices on their site")
+        await say(ctx, sender, f"{building['name']}'s site doesn't list {label} prices right now. I'll get them from the office when it opens.")
+    else:
+        best = fits[0]
+        per = " per bed" if best.get("per_bed") else ""
+        await hub.offer(building["id"], status="best unit found", price=best["price"], discount=facts.get("specials") or "")
+        await hub.step("offers", "done", f"{best.get('name') or label}: ${best['price']}{per}")
+        lines = "; ".join(f"{p.get('name') or str(p.get('beds')) + ' bed'} ${p['price']}{' per bed' if p.get('per_bed') else ''} ({p.get('availability') or 'availability not listed'})" for p in plans[:5])
+        team_post("calls", f"{building['name']} live prices: {lines}." + (f" Special right now: {facts['specials']}." if facts.get("specials") else ""))
+
+    # 3. Papers: what they'll need without an SSN.  Policy: fees and lease terms to watch.
+    await hub.step("paperwork", "active", "Working out the no-SSN application")
+    intl = facts.get("international_or_no_ssn") or ""
+    fees = facts.get("fees") or {}
+    pw = await ask(ctx, paperwork.address, PaperworkRequest(building_id=building["id"], ssn_alternative=intl or "Passport, I-20 and proof of funds (not stated on their site, Homie will confirm with the office)",
+                                                            payment=facts.get("notes") or "", move_in=req.get("move_in")), 60)
+    pol = await ask(ctx, policy.address, PolicyRequest(question=f"Before applying at {building['name']}: fees {fees}, lease terms {facts.get('lease_terms')}, "
+                                                                f"utilities {facts.get('utilities')}, pet policy {facts.get('pet_policy')}. What should an international student without an SSN watch out for?",
+                                                       building_id=building["id"]), 60)
+
+    # 4. Calls: call now if the office is open and a line is connected; otherwise Homie Later books the call for opening time.
+    when = next_open(building.get("hours") or [])
+    allowed, _ = can_call_now(building)
+    if allowed and env("MOCK_CALLS", "1") != "1" and (env("TWILIO_ACCOUNT_SID") or building.get("relay_handle")):
+        await ask(ctx, caller.address, CallRequest(building_id=building["id"], purpose="quote", context={"move_in": req.get("move_in") or "August 20"}), CALL_TIMEOUT)
+    else:
+        await ask(ctx, later.address, ScheduleRequest(text=f"Call {building['name']} to confirm the {label}, the special, and what they accept instead of an SSN",
+                                                      kind="call_building", when_iso=when.isoformat(),
+                                                      payload={"sender": sender, "req": {k: v for k, v in req.items() if not k.startswith("_")}, "buildings": [building]}), 30)
+        team_post("homie", f"{building['name']}'s office isn't reachable right this second, so Homie Later will call them {human(when)} to lock it in.")
+    await pics_task
+
+    # 5. The plan, ready for one yes.
+    best = fits[0] if fits else None
+    apply_url = facts.get("application_url") or ""
+    summary = (f"Here's the plan for {building['name']}" + (f": {best.get('name') or label} at ${best['price']}{' per bed' if best.get('per_bed') else ''}/mo" if best else "") + ".\n"
+               + (f"Special: {facts['specials']}\n" if facts.get("specials") else "")
+               + (f"Fees: {', '.join(f'{k} {v}' for k, v in fees.items() if v)}\n" if any(fees.values()) else "")
+               + (f"No SSN: {', '.join(pw.documents)}\n" if isinstance(pw, PaperworkResult) else "")
+               + (f"Heads-up: {pol.answer[:300]}\n" if isinstance(pol, PolicyResult) and pol.answer else "")
+               + f"Office call: {human(when)} (Homie Later)\n"
+               + (f"Application: {apply_url}\n" if apply_url else "")
+               + "Want me to prep the application? I'll fill in everything except your personal details, and you hit submit.")
+    await hub.step("held", "active", f"Ready for your yes · {building['name']}")
+    ctx.storage.set(f"home:{sender}", building["id"])
+    await mapi.remember(f"Homie researched {building['name']} for them: {best.get('name') if best else label} at ${best['price'] if best else '?'}{' per bed' if best and best.get('per_bed') else ''}.",
+                        tags=["activity", "homie"], source="homie")
+    await say(ctx, sender, summary, end=True)
+
+
+def _domain(u: str) -> str:
+    import re as _re
+
+    m = _re.search(r"(?:https?://)?(?:www\.)?([^/\s]+)", u or "")
+    return m.group(1).lower() if m else ""
 
 
 def deal(o: dict) -> str:
@@ -551,6 +663,7 @@ async def resume_retries(ctx: Context):
 @homie.on_message(PicturesResult)
 @homie.on_message(MemoryResult)
 @homie.on_message(ScheduleResult)
+@homie.on_message(ScoutResult)
 async def on_specialist_reply(ctx: Context, sender: str, msg):
     resolve(msg)
 

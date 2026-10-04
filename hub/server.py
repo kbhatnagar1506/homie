@@ -81,6 +81,11 @@ def dashboard():
     return FileResponse(STATIC / "dashboard.html")
 
 
+@app.get("/about")
+def landing():
+    return FileResponse(STATIC / "landing.html")
+
+
 @app.get("/avatar")
 def avatar():
     return FileResponse(STATIC / "avatar.html")
@@ -149,6 +154,17 @@ async def live_request(body: dict):
     log(f"Live call: maintenance request {ticket_id} filed: {body.get('title')}")
     await publish()
     return {"ticket_id": ticket_id, "status": "filed"}
+
+
+@app.post("/api/trigger")
+async def trigger(body: dict):
+    """Owner-only: hand Homie a message as if texted on Relay (the team answers in the Relay team chat)."""
+    from homie.config import env
+
+    if not env("TRIGGER_TOKEN") or body.get("token") != env("TRIGGER_TOKEN"):
+        raise HTTPException(403)
+    live_queue.append({"type": "message", "text": body["text"]})
+    return {"queued": True}
 
 
 @app.post("/api/live/claim")
