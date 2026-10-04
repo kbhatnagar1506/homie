@@ -63,6 +63,7 @@ payments = Protocol(spec=payment_protocol_spec, role="seller")
 CALL_TIMEOUT = 300
 APPROVAL_TIMEOUT = 120
 approvals: dict[str, asyncio.Future] = {}
+active: set[str] = set()
 YES = ("approve", "yes", "yep", "yeah", "do it", "ok", "okay", "sure", "go", "book")
 STEPS = ["find", "offers", "negotiate", "paperwork", "held", "keys"]
 
@@ -85,6 +86,13 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
     if pending and not pending.done():
         pending.set_result(text)
         return
+    if sender in active:
+        await say(ctx, sender, await status_line())
+        return
+    saved = ctx.storage.get(f"offer:{sender}") or ctx.storage.get("offer:last")  # ASI:One may reply from a new session address
+    if saved and text.lower().lstrip().startswith(YES):
+        await finalize(ctx, sender, saved["best"], saved["offers"], saved["req"])
+        return
     intent = await parse_intent(text)
 
     if intent["intent"] == "repair":
@@ -92,7 +100,11 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
     elif intent["intent"] == "policy":
         await handle_policy(ctx, sender, text)
     elif intent["intent"] == "search":
-        await handle_search(ctx, sender, intent)
+        active.add(sender)
+        try:
+            await handle_search(ctx, sender, intent)
+        finally:
+            active.discard(sender)
     else:
         await say(ctx, sender,
                   "I'm Homie, your person in America. Tell me where and when you're moving, your budget, "
@@ -138,6 +150,8 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
         return
     best = next(o for o in neg.offers if o["building_id"] == neg.best_building_id)
     name = BUILDINGS[best["building_id"]]["name"]
+    ctx.storage.set(f"offer:{sender}", {"best": best, "offers": offers, "req": req})
+    ctx.storage.set("offer:last", {"best": best, "offers": offers, "req": req})
     await say(ctx, sender, f"{name} came down to ${best['price']}/mo with {best.get('discount')}. Approve?")
     approvals[sender] = asyncio.get_running_loop().create_future()
     try:
@@ -151,6 +165,13 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
         await say(ctx, sender, "Okay, not holding it. I'll keep watching for better deals and ping you.", end=True)
         return
     await hub.log_event("Approved by the student")
+    await finalize(ctx, sender, best, offers, req)
+
+
+async def finalize(ctx: Context, sender: str, best: dict, offers: list[dict], req: dict) -> None:
+    name = BUILDINGS[best["building_id"]]["name"]
+    ctx.storage.set(f"offer:{sender}", None)
+    ctx.storage.set("offer:last", None)
 
     # 3. Deal watcher: if the deal depends on a future discount day, wait for it.
     if best.get("discount_day") and not best.get("matched"):
@@ -176,6 +197,14 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
               f"{plan}\n\nYou only pay Homie when you get your keys.", end=not _payments_on())
     if _payments_on():
         await request_fee(ctx, sender, best["building_id"])
+
+
+async def status_line() -> str:
+    state = await hub.get("/api/state")
+    done = [k for k, v in (state.get("checklist") or {}).items() if v.get("status") == "done"]
+    offers = [o for o in (state.get("offers") or {}).values() if o.get("price")]
+    lines = ", ".join(f"{o['name']} ${o['price']} ({o.get('discount') or 'no discount'})" for o in offers)
+    return f"Still working on it. Done so far: {', '.join(done) or 'starting calls'}. Offers: {lines or 'calls in progress'}. I'll message you the moment it's held."
 
 
 async def handle_repair(ctx: Context, sender: str, req: dict) -> None:
