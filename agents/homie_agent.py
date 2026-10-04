@@ -107,7 +107,7 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
         return
     ctx.logger.info(f"{sender}: {text}")
     CURRENT_USER.set(user_label(sender))
-    pending = approvals.get(sender) or applicant_wait.get(sender)
+    pending = approvals.get(sender) or applicant_wait.get(sender) or vibe_wait.get(sender)
     if pending and not pending.done():
         pending.set_result(text)
         return
@@ -327,9 +327,32 @@ async def vibe_check(ctx: Context, sender: str, req: dict, site: dict) -> list[s
     deck = await ask(ctx, vibecheck.address, VibeRequest(building_ids=ids, beds=req.get("beds"), budget=req.get("max_rent"), site=site), 90)
     if not isinstance(deck, VibeDeck):
         return list(BUILDINGS)
-    await say(ctx, sender, f"Vibe check time ✨ Scout found {deck.cards} places. Swipe right on the ones you'd live in, left on the rest, "
-                           f"and I'll go after only the ones you like:\n{deck.url}")
-    res = await ask(ctx, vibecheck.address, VibeWait(deck_id=deck.deck_id, wait_seconds=int(env("VIBE_WAIT_SECONDS", "900"))), int(env("VIBE_WAIT_SECONDS", "900")) + 60)
+    menu = "\n".join(f"{n}. {BUILDINGS[b]['name']}" + (f" · ${site[b]['price']}/mo" if site.get(b, {}).get("price") else "")
+                      + (f" · {site[b]['special'][:60]}" if site.get(b, {}).get("special") else "") for n, b in enumerate(ids, 1))
+    await say(ctx, sender, f"Vibe check time ✨ Scout found {deck.cards} places:\n{menu}\n\n"
+                           f"Reply with the numbers you'd live in (like \"1 3\"), or swipe through them with photos here:\n{deck.url}")
+    # Whichever comes first: swipes on the deck, or a reply right here in the chat (so it all works inside ASI:One).
+    loop = asyncio.get_event_loop()
+    vibe_wait[sender] = loop.create_future()
+    swipe = asyncio.ensure_future(ask(ctx, vibecheck.address, VibeWait(deck_id=deck.deck_id, wait_seconds=int(env("VIBE_WAIT_SECONDS", "900"))),
+                                      int(env("VIBE_WAIT_SECONDS", "900")) + 60))
+    done, _ = await asyncio.wait({swipe, vibe_wait[sender]}, return_when=asyncio.FIRST_COMPLETED)
+    if vibe_wait[sender] in done:
+        import re as _re
+
+        reply = vibe_wait.pop(sender).result()
+        picks = [int(n) for n in _re.findall(r"\d+", reply) if 0 < int(n) <= len(ids)]
+        if _re.search(r"\ball\b", reply.lower()):
+            picks = list(range(1, len(ids) + 1))
+        liked = [ids[n - 1] for n in dict.fromkeys(picks)]
+        for b in ids:  # mirror the chat picks onto the deck so mission control shows them
+            await hub.post(f"/api/vibe/{deck.deck_id}/swipe", {"building_id": b, "dir": "right" if b in liked else "left"})
+        swipe.cancel()
+        res = VibeResult(liked=liked, passed=[b for b in ids if b not in liked], done=True)
+        await hub.log_event(f"✨ Vibe check done in chat: {len(liked)} liked")
+    else:
+        vibe_wait.pop(sender, None)
+        res = swipe.result()
     if not isinstance(res, VibeResult) or not (res.liked or res.passed):
         await say(ctx, sender, "No swipes yet, so I'll keep every building in play for now.")
         return ids
@@ -660,6 +683,7 @@ async def finalize(ctx: Context, sender: str, best: dict, offers: list[dict], re
 
 
 applicant_wait: dict[str, asyncio.Future] = {}
+vibe_wait: dict[str, asyncio.Future] = {}
 EMAIL = r"[\w.+-]+@[\w-]+\.[\w.-]+"
 NAME_PROMPT = """Pull the person's own name and email out of this message. Return JSON {"first": str, "last": str, "email": str}, empty strings if missing."""
 

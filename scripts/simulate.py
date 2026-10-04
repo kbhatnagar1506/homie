@@ -42,6 +42,11 @@ async def reply(ctx: Context, sender: str, msg: ChatMessage):
                 print("STUDENT > 1 bedroom\n", flush=True)
                 await ctx.send(sender, ChatMessage(timestamp=datetime.now(timezone.utc), msg_id=uuid4(),
                                                    content=[TextContent(type="text", text="1 bedroom")]))
+            if os.environ.get("SIM_CHAT_PICKS") and "Reply with the numbers" in c.text:
+                picks = os.environ["SIM_CHAT_PICKS"]
+                print(f"STUDENT > {picks}\n", flush=True)
+                await ctx.send(sender, ChatMessage(timestamp=datetime.now(timezone.utc), msg_id=uuid4(),
+                                                   content=[TextContent(type="text", text=picks)]))
             if c.text.rstrip().endswith("Approve?"):
                 print("STUDENT > Approve\n", flush=True)
                 await ctx.send(sender, ChatMessage(timestamp=datetime.now(timezone.utc), msg_id=uuid4(),
