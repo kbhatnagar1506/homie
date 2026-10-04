@@ -235,6 +235,48 @@ async def live_request(body: dict):
     return {"ticket_id": ticket_id, "status": "filed"}
 
 
+# ---------- web chat: talk to the team without Relay ----------
+
+chat_feed: list[dict] = []
+chat_queue: list[str] = []
+
+
+@app.get("/chat")
+def chat_page():
+    return FileResponse(STATIC / "chat.html")
+
+
+@app.post("/api/chat/send")
+async def chat_send(body: dict):
+    text = (body.get("text") or "").strip()[:2000]
+    if not text:
+        raise HTTPException(400, "empty message")
+    chat_feed.append({"id": len(chat_feed) + 1, "ts": time.time(), "role": "you", "text": text, "kind": "message"})
+    chat_queue.append(text)
+    return {"ok": True}
+
+
+@app.post("/api/chat/claim")
+async def chat_claim():
+    items = list(chat_queue)
+    chat_queue.clear()
+    return {"items": items}
+
+
+@app.post("/api/chat/mirror")
+async def chat_mirror(body: dict):
+    chat_feed.append({"id": len(chat_feed) + 1, "ts": time.time(), "role": body.get("role", "homie"), "text": body.get("text", ""),
+                      "links": body.get("links", []), "buttons": body.get("buttons", []), "images": body.get("images", []),
+                      "kind": body.get("kind", "message")})
+    del chat_feed[:-400]
+    return {"ok": True}
+
+
+@app.get("/api/chat/feed")
+def chat_feed_since(after: int = 0):
+    return {"items": [m for m in chat_feed if m["id"] > after]}
+
+
 @app.post("/api/trigger")
 async def trigger(body: dict):
     """Owner-only: hand Homie a message as if texted on Relay (the team answers in the Relay team chat)."""

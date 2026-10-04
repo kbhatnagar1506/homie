@@ -14,7 +14,11 @@ from homie.config import env
 
 if __name__ == "__main__":
     agents = [homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, later, scout, vibecheck]
-    if env("RELAY_TOKEN_HOMIE"):
+    if env("WEB_CHAT", "0") == "1":  # talk to the team from /chat instead of Relay
+        from agents.web_bridge import web_bridge
+
+        agents.append(web_bridge)
+    elif env("RELAY_TOKEN_HOMIE"):
         from agents.relay_bridge import bridge
 
         agents.append(bridge)

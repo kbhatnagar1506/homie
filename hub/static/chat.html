@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Homie Team Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" />
+<style>
+  :root { --bg:#0b0f15; --surface:#131a24; --surface2:#18212d; --fg:#e9eef5; --muted:#8e9aac; --line:#243041; --accent:#ff9a62; --you:#2b5cff; --live:#3dffa0;
+          --display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif; --body:"Figtree","Segoe UI",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace; color-scheme:dark; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; }
+  body { background:var(--bg); color:var(--fg); font-family:var(--body); font-size:15px; display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--line); background:var(--surface); }
+  header img.me { width:40px; height:40px; border-radius:12px; }
+  header h1 { font-family:var(--display); font-weight:800; font-size:20px; margin:0; letter-spacing:-.01em; }
+  header small { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12.5px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .dot.on { background:var(--live); box-shadow:0 0 8px var(--live); }
+  .team { margin-left:auto; display:flex; }
+  .team img { width:28px; height:28px; border-radius:50%; border:2px solid var(--surface); margin-left:-7px; }
+  .team img:first-child { margin-left:0; }
+  main { flex:1; overflow-y:auto; padding:18px 16px 8px; }
+  .log { max-width:860px; margin:0 auto; display:flex; flex-direction:column; gap:10px; }
+  .msg { display:flex; gap:10px; align-items:flex-end; max-width:min(680px, 92%); }
+  .msg img.av { width:32px; height:32px; border-radius:10px; flex:none; }
+  .msg .col { min-width:0; display:flex; flex-direction:column; gap:4px; }
+  .msg .name { font-size:12px; color:var(--muted); font-weight:600; }
+  .bubble { background:var(--surface2); border:1px solid var(--line); border-radius:16px 16px 16px 6px; padding:9px 13px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .you { align-self:flex-end; flex-direction:row-reverse; }
+  .you .bubble { background:var(--you); border-color:transparent; border-radius:16px 16px 6px 16px; color:#fff; }
+  .you .name { text-align:right; }
+  .handoff { align-self:center; font-family:var(--mono); font-size:11.5px; color:var(--muted); display:flex; align-items:center; gap:6px; max-width:92%; }
+  .handoff img { width:16px; height:16px; border-radius:4px; }
+  .handoff span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .actions { display:flex; flex-wrap:wrap; gap:6px; }
+  .actions button, .actions a { font:inherit; font-size:13px; padding:6px 12px; border-radius:99px; border:1px solid var(--line); background:var(--surface); color:var(--fg); cursor:pointer; text-decoration:none; }
+  .actions button:hover, .actions a:hover { border-color:var(--accent); }
+  .actions a.big { background:var(--accent); color:#1b0f06; border-color:transparent; font-weight:600; }
+  .shots { display:flex; gap:6px; flex-wrap:wrap; }
+  .shots img { width:150px; height:96px; object-fit:cover; object-position:top; border-radius:10px; border:1px solid var(--line); }
+  .empty { color:var(--muted); text-align:center; padding:40px 10px; }
+  .suggest { max-width:860px; margin:0 auto; display:flex; gap:6px; flex-wrap:wrap; padding:0 16px 8px; }
+  .suggest button { font:inherit; font-size:12.5px; padding:5px 11px; border-radius:99px; border:1px dashed var(--line); background:transparent; color:var(--muted); cursor:pointer; }
+  .suggest button:hover { color:var(--fg); border-color:var(--accent); }
+  form { display:flex; gap:8px; padding:10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); border-top:1px solid var(--line); background:var(--surface); }
+  form .inner { max-width:860px; margin:0 auto; width:100%; display:flex; gap:8px; }
+  textarea { flex:1; min-width:0; resize:none; font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:14px; padding:11px 13px; height:46px; }
+  textarea:focus { outline:2px solid color-mix(in srgb, var(--accent) 55%, transparent); border-color:var(--accent); }
+  form button { font:inherit; font-weight:600; padding:0 18px; border-radius:14px; border:0; background:var(--accent); color:#1b0f06; cursor:pointer; }
+  .typing { font-size:12.5px; color:var(--muted); padding-left:42px; }
+</style>
+</head>
+<body>
+<header>
+  <img class="me" src="/avatars/homie.png" alt="" />
+  <div><h1>Homie Team</h1><small><span class="dot" id="dot"></span><span id="status">connecting…</span></small></div>
+  <div class="team" id="team"></div>
+</header>
+<main id="scroller"><div class="log" id="log"><div class="empty" id="empty">Text the team. Homie reads every message and decides who answers.</div></div></main>
+<div class="suggest" id="suggest"></div>
+<form id="form"><div class="inner">
+  <textarea id="text" placeholder="Message the Homie team…" rows="1" aria-label="Message"></textarea>
+  <button type="submit" id="send">Send</button>
+</div></form>
+<script>
+const PEOPLE = {
+  homie: ["Homie", "homie"], jev: ["Homie", "homie"], calls: ["Calls", "calls"], "homie-caller": ["Calls", "calls"],
+  papers: ["Papers", "papers"], "homie-paperwork": ["Papers", "papers"], fix: ["Fix", "fix"], "homie-repairs": ["Fix", "fix"],
+  policy: ["Policy", "policy"], "homie-policy": ["Policy", "policy"], pics: ["Pics", "pics"], "homie-pictures": ["Pics", "pics"],
+  memory: ["Memory", "memory"], "homie-memory": ["Memory", "memory"], "homie-scout": ["Scout", "scout"], scout: ["Scout", "scout"],
+  "homie-vibecheck": ["Vibecheck", "vibecheck"], vibecheck: ["Vibecheck", "vibecheck"], "homie-later": ["Later", "later"], later: ["Later", "later"],
+  "homie-negotiator": ["Negotiator", "negotiator"], negotiator: ["Negotiator", "negotiator"],
+};
+const who = r => PEOPLE[r] || [r, "homie"];
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const log = document.getElementById("log"), scroller = document.getElementById("scroller");
+document.getElementById("team").innerHTML = ["homie", "calls", "papers", "fix", "policy", "pics", "memory"].map(r => `<img src="/avatars/${r}.png" alt="" title="${who(r)[0]}">`).join("");
+const SUGGEST = ["find me a 1 bedroom off campus near UC Berkeley under 3500, no SSN", "1 3 4", "my ice maker is broken",
+                 "can my landlord keep my whole deposit for one scratch?", "what do you know about me?"];
+document.getElementById("suggest").innerHTML = SUGGEST.map(s => `<button type="button">${esc(s)}</button>`).join("");
+document.querySelectorAll("#suggest button").forEach(b => b.onclick = () => send(b.textContent));
+
+function linkLabel(u) {
+  if (/\/vibe\//.test(u)) return ["✨ Open the swipe deck", true];
+  if (/browser-use\.com\/share/.test(u)) return ["🖥 Watch your application live", true];
+  if (/\/portal/.test(u)) return ["Open the portal", false];
+  return [u.replace(/^https?:\/\//, "").slice(0, 48), false];
+}
+function render(m) {
+  document.getElementById("empty")?.remove();
+  const el = document.createElement("div");
+  if (m.kind === "handoff") {
+    const [name, av] = who(m.role);
+    el.className = "handoff";
+    el.innerHTML = `<img src="/avatars/${av}.png" alt=""><span><b>${esc(name)}</b> ${esc(m.text)}</span>`;
+  } else if (m.role === "you") {
+    el.className = "msg you";
+    el.innerHTML = `<div class="col"><div class="bubble">${esc(m.text)}</div></div>`;
+  } else {
+    const [name, av] = who(m.role);
+    const links = (m.links || []).map(u => { const [l, big] = linkLabel(u); return `<a class="${big ? "big" : ""}" href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>`; }).join("");
+    const buttons = (m.buttons || []).map(b => `<button type="button" data-say="${esc(b)}">${esc(b)}</button>`).join("");
+    const shots = (m.images || []).map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="screenshot"></a>`).join("");
+    el.className = "msg";
+    el.innerHTML = `<img class="av" src="/avatars/${av}.png" alt=""><div class="col"><div class="name">${esc(name)}</div>
+      ${m.text ? `<div class="bubble">${esc(m.text)}</div>` : ""}${shots ? `<div class="shots">${shots}</div>` : ""}
+      ${links || buttons ? `<div class="actions">${links}${buttons}</div>` : ""}</div>`;
+    el.querySelectorAll("[data-say]").forEach(b => b.onclick = () => send(b.dataset.say));
+  }
+  const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
+  log.appendChild(el);
+  if (atBottom || m.role === "you") scroller.scrollTop = scroller.scrollHeight;
+}
+
+let last = 0, ok = false;
+async function poll() {
+  try {
+    const r = await fetch(`/api/chat/feed?after=${last}`);
+    const d = await r.json();
+    for (const m of d.items) { render(m); last = Math.max(last, m.id); }
+    if (!ok) { ok = true; document.getElementById("dot").classList.add("on"); document.getElementById("status").textContent = "live · 11 agents"; }
+  } catch (e) {
+    ok = false; document.getElementById("dot").classList.remove("on"); document.getElementById("status").textContent = "reconnecting…";
+  }
+  setTimeout(poll, 1000);
+}
+async function send(text) {
+  text = (text || "").trim(); if (!text) return;
+  document.getElementById("text").value = "";
+  await fetch("/api/chat/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+}
+document.getElementById("form").onsubmit = e => { e.preventDefault(); send(document.getElementById("text").value); };
+document.getElementById("text").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e.target.value); } });
+poll();
+</script>
+</body>
+</html>
