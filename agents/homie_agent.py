@@ -392,7 +392,12 @@ async def status_line() -> str:
 async def handle_repair(ctx: Context, sender: str, req: dict) -> None:
     building_id = ctx.storage.get(f"home:{sender}") or next(iter(BUILDINGS))
     await say(ctx, sender, f"Got it. Filing a repair at {BUILDINGS[building_id]['name']} and calling the office now.")
-    result = await ask(ctx, repairs.address, RepairRequest(building_id=building_id, issue=req.get("issue") or "Ice maker not working"), CALL_TIMEOUT * 2 + 30)
+    import re as _re
+
+    issue = req.get("issue") or "Ice maker not working"
+    photo = _re.search(r"photo: (https?://\S+)", issue)
+    issue = _re.sub(r"\s*photo: https?://\S+", "", issue)
+    result = await ask(ctx, repairs.address, RepairRequest(building_id=building_id, issue=issue, photo_url=photo.group(1) if photo else None), CALL_TIMEOUT * 2 + 30)
     if isinstance(result, RepairResult):
         await say(ctx, sender, f"Ticket {result.ticket_id}. {result.note}", end=True)
     else:

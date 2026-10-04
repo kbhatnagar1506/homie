@@ -28,6 +28,7 @@ from pipecat.frames.frames import (
     OutputImageRawFrame,
     StartFrame,
     TTSTextFrame,
+    UserImageRawFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
@@ -124,6 +125,48 @@ class AvatarCamera(FrameProcessor):
             await asyncio.sleep(1 / FPS)
 
 
+class CameraTap(FrameProcessor):
+    """Keeps the renter's latest camera frame so the agent can 'take a picture' when they show it something."""
+
+    def __init__(self):
+        super().__init__()
+        self.latest = None
+
+    async def process_frame(self, frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        if isinstance(frame, UserImageRawFrame):
+            self.latest = frame
+            return  # don't send raw video down the voice pipeline
+        await self.push_frame(frame, direction)
+
+    def snapshot(self) -> bytes | None:
+        f = self.latest
+        if not f:
+            return None
+        img = Image.frombytes("RGB" if f.format in (None, "RGB") else f.format, f.size, f.image).convert("RGB")
+        img.thumbnail((1024, 1024))
+        out = io.BytesIO()
+        img.save(out, "JPEG", quality=85)
+        return out.getvalue()
+
+
+async def describe_photo(jpeg: bytes, context: str) -> str:
+    """Gemini looks at the photo the way a maintenance tech would."""
+    from homie.llm import _client
+    from homie.config import LLM_MODEL
+
+    client = _client()
+    if not client:
+        return ""
+    b64 = base64.b64encode(jpeg).decode()
+    r = await client.chat.completions.create(model=env("VISION_MODEL", "google/gemini-2.5-flash-lite"), messages=[{"role": "user", "content": [
+        {"type": "text", "text": "You're a building maintenance tech looking at a renter's video-call camera. In one or two short "
+                                 "sentences: what appliance or fixture is this, what looks wrong, and anything worth noting for the "
+                                 f"repair person. If you can't see the problem clearly, say what you'd need to see. Context: {context}"},
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]}], temperature=0.2)
+    return (r.choices[0].message.content or "").strip()
+
+
 EMOTIONS = {"calm": "Calm, informative", "happy": "Warm and pleased", "excited": "Excited, celebrating good news",
             "concerned": "Sympathetic about a problem or bad news", "thinking": "Considering, asking a question or checking"}
 
@@ -173,9 +216,11 @@ class LipSync(FrameProcessor):
 FIX_PROMPT = (
     "You are Homie Fix, a warm, dependable maintenance friend on a live video call with a renter. Speak in short, natural "
     "sentences, like a real person on FaceTime: friendly, a little playful, never robotic, no lists or markdown. "
-    "Your job: understand what's broken, ask at most two quick follow-up questions (where exactly, since when, okay to "
-    "enter when they're out), then call file_maintenance_request with a short title and clear details, tell them it's "
-    "filed and that you're calling the office now. If it sounds dangerous (gas, fire, flooding, sparks), tell them to get "
+    "The moment the renter says or hints that something is broken, leaking or not working: say one quick natural line "
+    "like 'Oh no, okay, show it to me, I'm looking at it now' and immediately call look_at_problem. Then tell them in one "
+    "sentence what you see. Ask at most one quick follow-up (since when, or okay to enter when they're out), then call "
+    "file_maintenance_request with a short title and details that include what you saw, tell them it's filed and that "
+    "you're calling the office now. If the camera is off, ask them to turn it on and point it at the problem. If it sounds dangerous (gas, fire, flooding, sparks), tell them to get "
     "safe and call 911 first. {memory}"
 )
 
@@ -185,6 +230,8 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
     from homie import mapi
 
     renderer = AvatarRenderer(role)
+    camera = CameraTap()
+    seen = {"photo": None, "description": ""}
     await renderer.start()
     known = "; ".join(m["content"] for m in await mapi.recall("renter apartment building unit preferences", limit=5))
     instructions = FIX_PROMPT.format(memory=f"What you remember about them: {known}" if known else "")
@@ -192,14 +239,35 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
     transport = RelayTransport(api_key=token, call_id=call_id, base_url=env("RELAY_BASE_URL", "https://api.relayapp.im"),
                                params=RelayParams(audio_in_enabled=True, audio_out_enabled=True, video_out_enabled=True,
                                                   video_out_is_live=True, video_out_width=W, video_out_height=H,
-                                                  video_out_framerate=FPS))
+                                                  video_out_framerate=FPS, video_in_enabled=True))
+
+    async def look(params):
+        """Take a picture from the renter's camera and analyse it."""
+        jpeg = camera.snapshot()
+        if not jpeg:
+            await params.result_callback({"camera": "off", "say": "Ask them to turn on their camera and point it at the problem."})
+            return
+        import uuid as _uuid
+
+        from homie.config import PUBLIC_URL, ROOT
+
+        name = f"{_uuid.uuid4().hex[:12]}.jpg"
+        (ROOT / "data" / "shots").mkdir(parents=True, exist_ok=True)
+        (ROOT / "data" / "shots" / name).write_bytes(jpeg)
+        seen["photo"] = f"{PUBLIC_URL}/shots/{name}"
+        await renderer.js("(u) => homie.snapshot(u)", "data:image/jpeg;base64," + base64.b64encode(jpeg).decode())
+        await renderer.emotion("thinking")
+        seen["description"] = await describe_photo(jpeg, params.arguments.get("what_they_said", ""))
+        await params.result_callback({"what_i_see": seen["description"] or "The picture is unclear.", "photo_saved": bool(seen["photo"])})
 
     async def file_request(params):
         args = params.arguments
         title, details, urgency = args.get("title", "Maintenance request"), args.get("details", ""), args.get("urgency", "normal")
+        if seen["description"] and seen["description"][:40] not in details:
+            details = f"{details}\nSeen on camera: {seen['description']}"
         await renderer.ticket(title, details, "sent to office")
         await renderer.emotion("happy")
-        await on_request(title, details, urgency)
+        await on_request(title, details, urgency, seen["photo"])
         await params.result_callback({"status": "filed", "next": "Homie Fix is calling the office to book a repair slot"})
 
     tool = {"name": "file_maintenance_request", "description": "File the renter's maintenance request and start calling the office.",
@@ -210,8 +278,10 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
     from pipecat.adapters.schemas.function_schema import FunctionSchema
     from pipecat.adapters.schemas.tools_schema import ToolsSchema
 
-    tools = ToolsSchema(standard_tools=[FunctionSchema(name=tool["name"], description=tool["description"],
-                                                       properties=tool["properties"], required=tool["required"])])
+    tools = ToolsSchema(standard_tools=[
+        FunctionSchema(name="look_at_problem", description="Take a picture from the renter's camera and analyse what's broken. Call it as soon as they say something is broken.",
+                       properties={"what_they_said": {"type": "string", "description": "What the renter said is wrong"}}, required=[]),
+        FunctionSchema(name=tool["name"], description=tool["description"], properties=tool["properties"], required=tool["required"])])
     context = LLMContext(tools=tools)
     aggregators = LLMContextAggregatorPair(context)
     project, creds = env("GOOGLE_CLOUD_PROJECT", "patchguard-reakon"), env("GOOGLE_APPLICATION_CREDENTIALS") or None
@@ -227,7 +297,8 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
         tts = ElevenLabsTTSService(api_key=env("ELEVENLABS_API_KEY"), voice_id=env("ELEVENLABS_VOICE_ID", "SOYHLrjzK2X1ezoPC6cr"),
                                    model="eleven_flash_v2_5")
         llm.register_function("file_maintenance_request", file_request)
-        stages = [transport.input(), stt, aggregators.user(), llm, tts, AvatarCamera(renderer), transport.output(),
+        llm.register_function("look_at_problem", look)
+        stages = [transport.input(), camera, stt, aggregators.user(), llm, tts, AvatarCamera(renderer), transport.output(),
                   LipSync(renderer, words_are_timed=True), aggregators.assistant()]
         rates = PipelineParams(audio_in_sample_rate=16_000, audio_out_sample_rate=24_000)
     else:
@@ -236,7 +307,8 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
         llm = GeminiLiveVertexLLMService(credentials_path=creds, location=VERTEX_LOCATION, project_id=project,
                                          voice_id=env("VOICE_ID", "Puck"), system_instruction=instructions, tools=tools)
         llm.register_function("file_maintenance_request", file_request)
-        stages = [transport.input(), aggregators.user(), llm, AvatarCamera(renderer), transport.output(),
+        llm.register_function("look_at_problem", look)
+        stages = [transport.input(), camera, aggregators.user(), llm, AvatarCamera(renderer), transport.output(),
                   LipSync(renderer, words_are_timed=False), aggregators.assistant()]
         rates = PipelineParams(audio_in_sample_rate=16_000, audio_out_sample_rate=24_000)
 

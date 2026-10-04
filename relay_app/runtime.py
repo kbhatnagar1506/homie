@@ -274,9 +274,10 @@ class RelayTeam:
         """Answer with the live 3D avatar; a maintenance request filed on the call goes to the Repairs agent."""
         from homie.avatar_call import run_avatar_call
 
-        async def on_request(title: str, details: str, urgency: str) -> None:
+        async def on_request(title: str, details: str, urgency: str, photo: str | None = None) -> None:
             self.route = ("fix", self.state["direct"].get("fix") or chat_id)
-            await self.send_to_homie(f"Repair needed: {title}. {details} (urgency: {urgency}, reported on a video call)")
+            await self.send_to_homie(f"Repair needed: {title}. {details} (urgency: {urgency}, reported on a video call)"
+                                     + (f" photo: {photo}" if photo else ""))
 
         try:
             await run_avatar_call(env(TEAM[role].token_env), call_id, role, on_request)

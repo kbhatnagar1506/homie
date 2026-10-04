@@ -23,6 +23,12 @@
   .ticket .st.sent { background:#d4f5e2; color:#137a3d; }
   .ticket .title { font-size:20px; font-weight:800; color:#151515; margin:8px 0 6px; }
   .ticket .body { font:15px/1.5 "JetBrains Mono", monospace; color:#333; white-space:pre-wrap; min-height:44px; }
+  .snap { position:absolute; top:96px; right:22px; width:170px; background:#fff; padding:8px 8px 26px; border-radius:6px; box-shadow:0 14px 40px rgba(0,0,0,.35); transform:rotate(6deg) scale(.6); opacity:0; transition:all .5s cubic-bezier(.2,.9,.3,1.3); }
+  .snap.show { transform:rotate(4deg); opacity:1; }
+  .snap img { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:2px; display:block; }
+  .snap span { position:absolute; bottom:6px; left:0; right:0; text-align:center; font:700 11px Inter; color:#555; }
+  .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
+  .flash.go { animation:fl .5s ease-out; } @keyframes fl { 0% { opacity:.85; } 100% { opacity:0; } }
   .ticket .cursor { display:inline-block; width:8px; height:17px; background:#333; vertical-align:-3px; animation:p 1s infinite; }
 </style>
 </head>
@@ -32,6 +38,8 @@
 <div class="live"><i></i>LIVE</div>
 <div class="ticket" id="ticket"><div class="hd"><span id="tnum">Maintenance request</span><span class="st" id="tst">typing…</span></div><div class="title" id="ttitle"></div><div class="body" id="tbody"></div></div>
 <div class="caption" id="caption"></div>
+<div class="snap" id="snap"><img id="snapimg" alt=""><span>📸 looking at it…</span></div>
+<div class="flash" id="flash"></div>
 <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
 <script type="module">
 import * as THREE from "three";
@@ -139,6 +147,8 @@ window.homie = {
       if (i >= text.length) { clearInterval(window._typer); body.innerHTML = text; if (status) homie.ticketStatus(status); } }, 38); },
   ticketStatus(s, num) { const st = document.getElementById("tst"); st.textContent = s; st.className = "st" + (/sent|booked|filed/i.test(s) ? " sent" : "");
     if (num) document.getElementById("tnum").textContent = "Maintenance request · " + num; },
+  snapshot(src) { const f = document.getElementById("flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
+    document.getElementById("snapimg").src = src; document.getElementById("snap").classList.add("show"); },
   hideTicket() { document.getElementById("ticket").classList.remove("show"); },
 };
 
