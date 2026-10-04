@@ -81,7 +81,24 @@
   #lines .office .who { color: var(--hot); }
   #lines .empty { color: var(--dim); }
 
+  #console { position: fixed; left: 16px; bottom: 16px; width: min(560px, calc(100vw - 32px)); height: 230px; background: var(--panel);
+             border: 1px solid var(--line); z-index: 4; display: flex; flex-direction: column; font-family: "JetBrains Mono", monospace; backdrop-filter: blur(8px); }
+  #console .bar { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 10px; letter-spacing: .16em; color: var(--dim); text-transform: uppercase; }
+  #console .bar .blink { width: 7px; height: 7px; background: var(--live); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  #console .bar button { margin-left: auto; background: none; border: 1px solid var(--line); color: var(--dim); font: inherit; font-size: 9px; padding: 2px 6px; cursor: pointer; }
+  #feed { flex: 1; overflow-y: auto; padding: 8px 10px; font-size: 11px; line-height: 1.6; }
+  #feed .e { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #feed .e:hover { white-space: normal; }
+  #feed .t { color: var(--dim); margin-right: 8px; }
+  #feed .a { color: var(--accent); }
+  #feed .call { color: var(--live); }
+  #feed .scout { color: var(--hot); }
+  #console.min { height: 32px; }
+  #console.min #feed { display: none; }
+
   @media (max-width: 720px) {
+    #console { height: 160px; left: 8px; bottom: 8px; width: calc(100vw - 16px); }
     header { font-size: 10px; gap: 8px; padding: 12px 16px; flex-wrap: wrap; }
     #request { max-width: 100%; order: 9; flex-basis: 100%; }
     #panel { top: auto; height: 62vh; right: 8px; left: 8px; width: auto; bottom: 8px; }
@@ -96,6 +113,8 @@
   <a href="/">mission control</a>
 </header>
 <div id="viewport"><div id="stage"><svg id="wires"></svg></div></div>
+
+<section id="console"><div class="bar"><span class="blink"></span>live console · every agent, every call<button id="minbtn">_</button></div><div id="feed"></div></section>
 
 <aside id="panel">
   <div class="head"><img id="p-img" alt="" /><div><div class="t" id="p-title"></div><div class="s" id="p-sub"></div></div>
@@ -184,7 +203,7 @@ function render() {
   offers.forEach((o, i) => {
     const id = "b:" + o.building_id; seen.add(id);
     const live = !!o.on_call, done = !!o.price, missed = /no answer|didn't|closed|busy|failed/i.test(o.status || "");
-    const sub = live ? "● on the phone now" : o.price ? `$${o.price}/mo ${o.discount ? "· " + o.discount : ""}` : (o.status || "queued");
+    const sub = live ? "● on the phone now" : o.price ? `$${o.price}/mo ${o.discount ? "· " + o.discount : ""}` : o.site_price ? `site $${o.site_price} · ${o.status || ""}` : (o.status || "queued");
     node(id, 900, top + i * 76, (live ? "live" : done ? "done" : missed ? "missed" : "") + ((o.call_key && socks[o.call_key]) ? " listening" : ""),
       "/avatars/calls.png", o.name || o.building_id, sub, live ? "LIVE" : done ? "QUOTE" : "");
     wire("homie-caller", id, live ? "live" : (active.has("homie-caller>homie") ? "active" : ""));
@@ -192,6 +211,7 @@ function render() {
   for (const id of Object.keys(nodes)) if (id.startsWith("b:") && !seen.has(id)) { nodes[id].remove(); delete nodes[id]; }
 
   svg.innerHTML = wires.join("");
+  renderFeed();
   if (typeof syncAll === "function") { syncAll(); updateAllLabel(); }
   if (selected) fillPanel(selected);
   fit();
@@ -203,6 +223,26 @@ function fit() {
   stage.style.transform = `translate(${Math.max(0, (vw - W * s) / 2)}px, ${50}px) scale(${s})`;
 }
 addEventListener("resize", fit);
+
+// ---------- live console ----------
+const NAMES = { "homie": "Homie", "homie-caller": "Calls", "homie-scout": "Scout", "homie-pictures": "Pics", "homie-negotiator": "Negotiator",
+  "homie-paperwork": "Papers", "homie-policy": "Policy", "homie-memory": "Memory", "homie-later": "Later", "homie-repairs": "Fix", "jev": "Homie" };
+let feedKey = "";
+function renderFeed() {
+  const ev = [
+    ...(S.log || []).map(l => ({ t: l.t, cls: /📞|call|dial|picked|answer/i.test(l.text) ? "call" : /scout|website/i.test(l.text) ? "scout" : "", html: esc(l.text) })),
+    ...(S.agentlog || []).map(m => ({ t: m.t, cls: m.from === "homie-scout" || m.to === "homie-scout" ? "scout" : m.from === "homie-caller" || m.to === "homie-caller" ? "call" : "",
+      html: `<span class="a">${esc(NAMES[m.from] || m.from)} → ${esc(NAMES[m.to] || m.to)}</span> ${esc(m.summary || m.kind)}` })),
+    ...Object.values(S.offers || {}).flatMap(o => (o.transcript || []).slice(-2).map(line => ({ t: "", cls: "call", html: `☎ ${esc(o.name || "")}: ${esc(line)}` }))),
+  ].filter(e => e.t).sort((a, b) => a.t < b.t ? -1 : a.t > b.t ? 1 : 0).slice(-80);
+  const live = Object.values(S.offers || {}).filter(o => o.on_call).flatMap(o => (o.transcript || []).slice(-1).map(line => ({ t: "live", cls: "call", html: `☎ ${esc(o.name || "")} · ${esc(line)}` })));
+  const all = [...ev, ...live], key = all.map(e => e.t + e.html).join("|");
+  if (key === feedKey) return; feedKey = key;
+  const feed = document.getElementById("feed"), atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+  feed.innerHTML = all.length ? all.map(e => `<div class="e ${e.cls}"><span class="t">${esc(e.t)}</span>${e.html}</div>`).join("") : `<div class="e"><span class="t">--:--</span>waiting for a request · text Homie on Relay</div>`;
+  if (atBottom) feed.scrollTop = feed.scrollHeight;
+}
+document.getElementById("minbtn").onclick = () => document.getElementById("console").classList.toggle("min");
 
 // ---------- side panel ----------
 const panel = document.getElementById("panel");

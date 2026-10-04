@@ -154,6 +154,7 @@ class ScoutRequest(Model):
     building_id: str = ""
     url: str = ""
     beds: int | None = None
+    max_pages: int = 8
 
 
 class ScoutResult(Model):

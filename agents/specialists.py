@@ -92,8 +92,8 @@ async def on_call(ctx: Context, sender: str, req: CallRequest):
         await ctx.send(sender, CallResult(request_id=req.request_id, building_id=req.building_id, purpose=req.purpose,
                                           answered=False, summary=f"{building['name']} is {why}, so I didn't call."))
         return
-    await hub.offer(req.building_id, status=f"calling ({req.purpose})")
-    await hub.log_event(f"Calling {building['name']} to {req.purpose}")
+    await hub.offer(req.building_id, status=f"dialing ({req.purpose})")
+    await hub.log_event(f"📞 Dialing {building['name']} · {building.get('phone_display') or building.get('phone') or 'no number'} · {req.purpose}")
     result = await place_call(building, req.purpose, req.context)
     if result.get("transcript"):
         from homie import jev
@@ -283,7 +283,7 @@ async def on_scout(ctx: Context, sender: str, req: ScoutRequest):
         return
     await hub.log_event(f"Scout: reading every page of {url}")
     try:
-        out = await crawl(url)
+        out = await crawl(url, max_pages=req.max_pages or 8)
     except Exception as e:
         ctx.logger.error(f"Scout crawl failed: {e!r}")
         out = {"facts": {}, "shots": [], "pages": 0}

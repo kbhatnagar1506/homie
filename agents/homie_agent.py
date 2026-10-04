@@ -34,6 +34,7 @@ from homie.buildings import BUILDINGS, can_call_now, use
 from homie.schedule import TZ, human, next_open
 from homie.llm import _beds, parse_intent
 from homie.places import search_apartments
+from homie.events import team_post
 from homie.rpc import ask, name_of, resolve
 from homie.scope import CURRENT_USER
 from homie.models import (
@@ -239,8 +240,18 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
     await say(ctx, sender,
               f"On it. Found {len(BUILDINGS)} buildings in {area}"
               f"{f' ({open_now} open right now)' if any(b.get('real') for b in BUILDINGS.values()) else ''}. "
-              f"Calling them now about a {label}{f' under ${budget}' if budget else ''}"
-              f"{', no SSN' if req.get('no_ssn') else ''}. You can go to sleep.")
+              + (f"Scout's reading their websites, then Calls dials every open office about a {label}"
+                 if open_now or not any(b.get('real') for b in BUILDINGS.values()) else
+                 f"They're all closed right now, so Scout's reading their websites and Later will call the moment they open, about a {label}")
+              + f"{f' under ${budget}' if budget else ''}{', no SSN' if req.get('no_ssn') else ''}. You can go to sleep.")
+
+    # 0. Scout reads every building's website first: live prices, specials, office hours, no-SSN rules.
+    await hub.step("offers", "active", f"Scout is reading {len(BUILDINGS)} websites")
+    site_prices = await scout_all(ctx, beds)
+    if site_prices:
+        cheapest = min(site_prices, key=lambda p: p["price"])
+        team_post("calls", f"Scout read {len(site_prices)} building websites before we dial. Cheapest {label} online: "
+                           f"{BUILDINGS[cheapest['building_id']]['name']} at ${cheapest['price']}{' per bed' if cheapest.get('per_bed') else ''}. Calling to beat it.")
 
     # 1. Call every building at once (Caller agent).
     await hub.step("find", "done", f"{len(BUILDINGS)} buildings in {area}")
@@ -268,7 +279,6 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
 
 async def handle_building(ctx: Context, sender: str, req: dict, url: str) -> None:
     """'Get me an apartment at The Mix': the whole team goes deep on one building."""
-    from homie.events import team_post
 
     name_hint = req.get("building") or url
     area = req.get("area") or req.get("city") or env("DEFAULT_AREA", "downtown Atlanta, GA")
@@ -361,6 +371,32 @@ async def handle_building(ctx: Context, sender: str, req: dict, url: str) -> Non
     await mapi.remember(f"Homie researched {building['name']} for them: {best.get('name') if best else label} at ${best['price'] if best else '?'}{' per bed' if best and best.get('per_bed') else ''}.",
                         tags=["activity", "homie"], source="homie")
     await say(ctx, sender, summary, end=True)
+
+
+async def scout_all(ctx: Context, beds: int | None) -> list[dict]:
+    """Scout reads every building's site in parallel (4 at a time) and posts what it finds to mission control."""
+    gate = asyncio.Semaphore(int(env("SCOUT_PARALLEL", "4")))
+    found: list[dict] = []
+
+    async def one(bid: str) -> None:
+        b = BUILDINGS[bid]
+        if not b.get("website"):
+            return
+        async with gate:
+            res = await ask(ctx, scout.address, ScoutRequest(building_id=bid, url=b["website"], beds=beds, max_pages=4), 150)
+        if not isinstance(res, ScoutResult):
+            return
+        facts = res.facts or {}
+        plans = [p for p in (facts.get("floor_plans") or []) if p.get("price") and (beds is None or p.get("beds") == beds)]
+        best = min(plans, key=lambda p: p["price"]) if plans else None
+        await hub.offer(bid, site_price=best["price"] if best else None, site_special=facts.get("specials") or None,
+                        site_hours=facts.get("office_hours") or None, status="site read" + (f" · from ${best['price']}" if best else ""))
+        if best:
+            found.append({"building_id": bid, **best})
+
+    await asyncio.gather(*(one(bid) for bid in list(BUILDINGS)))
+    await hub.log_event(f"🔎 Scout read {sum(1 for b in BUILDINGS.values() if b.get('website'))} websites: {len(found)} list a matching price")
+    return found
 
 
 def _domain(u: str) -> str:
