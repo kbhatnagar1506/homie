@@ -5,6 +5,7 @@
 3. Run the agents (python -m agents.run): each one polls its Agentverse mailbox.
 """
 
+import agents  # noqa: F401  (sets SSL certs before any HTTPS)
 import asyncio
 import sys
 

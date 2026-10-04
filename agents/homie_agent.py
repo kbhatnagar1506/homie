@@ -45,6 +45,7 @@ from homie.models import (
 
 homie = Agent(
     name="homie",
+    handle=env("HOMIE_HANDLE", "homie-usa"),
     seed=seed("homie"),
     mailbox=env("AGENTVERSE_MAILBOX", env("HOMIE_MAILBOX", "1")) == "1",
     handle_messages_concurrently=True,
