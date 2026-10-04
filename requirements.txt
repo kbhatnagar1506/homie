@@ -4,6 +4,7 @@ google-auth
 httpx
 openai
 pillow
+playwright
 python-dotenv
 relaymessenger
 requests

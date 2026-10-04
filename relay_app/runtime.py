@@ -9,6 +9,7 @@ group chat (or that contact's direct chat until the group exists).
 import asyncio
 import json
 import logging
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 
@@ -17,14 +18,15 @@ from relaymessenger.websocket import run_websocket
 
 from homie import events, memory
 from homie import hub_client as hub
-from homie.config import ROOT, env
+from homie.config import PUBLIC_URL, ROOT, env, load_buildings
+from homie.screenshots import screenshot
 from homie.llm import complete_text, parse_intent
 from relay_app.team import GROUP_NAME, TEAM
 
 log = logging.getLogger("homie.relay")
 STATE = ROOT / "data" / "relay_state.json"
 BASE_URL = env("RELAY_BASE_URL", "https://api.relayapp.im")
-MENTIONS = {"calls": ("calls", "call"), "papers": ("papers", "paperwork", "documents"), "fix": ("fix", "repair"), "policy": ("policy", "rights", "lawyer")}
+MENTIONS = {"calls": ("calls", "call"), "papers": ("papers", "paperwork", "documents"), "fix": ("fix", "repair"), "policy": ("policy", "rights", "lawyer"), "pics": ("pics", "pictures", "photos", "screenshot")}
 
 
 class RelayTeam:
@@ -65,6 +67,7 @@ class RelayTeam:
             if role not in self.state["hello"]:
                 await self._hello(role)
         await self.ensure_team_chat()
+        await self._ensure_members()
         events.subscribe(self.on_team_post)
         await asyncio.gather(*(self._listen(role) for role in self.relays))
 
@@ -100,6 +103,18 @@ class RelayTeam:
             log.info("Could not name the team chat: %s", e)
         return True
 
+    async def _ensure_members(self) -> None:
+        chat_id = self.state.get("team_chat")
+        for role, handle in self.handles.items():
+            if not chat_id or role == "homie" or role in self.state.setdefault("members", []):
+                continue
+            try:
+                await self.relays["homie"].chats.participants.add(chat_id, handle=handle)
+            except Exception as e:
+                log.info("add %s to team chat: %s", handle, e)  # already a member, or not yet allowed
+            self.state["members"].append(role)
+            self._save()
+
     # ---------- sending ----------
 
     def _chat_for(self, role: str) -> str | None:
@@ -120,10 +135,11 @@ class RelayTeam:
     async def in_voice(self, role: str, update: str) -> str:
         return await complete_text(TEAM[role].voice, [{"role": "user", "content": f"Text the student this update in your own words. Keep every number, name and date exactly:\n{update}"}], fallback=update)
 
-    async def on_team_post(self, role: str, text: str) -> None:
+    async def on_team_post(self, role: str, text: str, images: list[str] | None = None) -> None:
         chat_id = self._chat_for(role)
         if chat_id:
-            await self.send(role, chat_id, await self.in_voice(role, text))
+            media = [{"type": "media", "url": u} for u in (images or [])[:4]]
+            await self.send(role, chat_id, await self.in_voice(role, text), extra=media)
 
     async def on_homie_reply(self, text: str) -> None:
         role, chat_id = self.route or ("homie", self._chat_for("homie"))
@@ -180,6 +196,25 @@ class RelayTeam:
                 return role
         return "homie"
 
+    async def _pics(self, chat_id: str, text: str) -> None:
+        url = re.search(r"https?://\S+", text)
+        lowered = text.lower()
+        targets = [(url.group(0), "that listing")] if url else [
+            (f"{PUBLIC_URL}/site/listing/{b['id']}", b["name"]) for b in load_buildings()
+            if b["name"].lower().split()[0] in lowered or b["id"].replace("_", " ") in lowered]
+        if not targets:
+            reply = await complete_text(TEAM["pics"].voice, [{"role": "user", "content": text + "\n(You can screenshot any listing link they send, or Maple Court, Arbor Lofts, Kerrytown Place, State Street Commons.)"}],
+                                        fallback="Send me a listing link or a building name and I'll screenshot it.")
+            await self.send("pics", chat_id, reply)
+            return
+        try:
+            await self.relays["pics"].chats.set_activity(chat_id, text="Taking screenshots", emoji="📸")
+        except Exception:
+            pass
+        images = [f"{PUBLIC_URL}/shots/{n}" for n in [await screenshot(u) for u, _ in targets[:3]] if n]
+        caption = await self.in_voice("pics", f"Screenshots of {', '.join(label for _, label in targets[:3])}." if images else "That page wouldn't load for me. Try another link?")
+        await self.send("pics", chat_id, caption, extra=[{"type": "media", "url": u} for u in images])
+
     async def _on_message(self, receiver: str, data: dict) -> None:
         if data.get("sender_handle") != self.owner:
             return  # ignore our own team's messages in the group
@@ -200,6 +235,10 @@ class RelayTeam:
             self.awaiting_approval = False
             self.route = ("homie", chat_id)
             await self.send_to_homie(text)
+            return
+
+        if role == "pics":
+            await self._pics(chat_id, text)
             return
 
         profile = await memory.update(self.owner, text)

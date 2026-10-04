@@ -17,7 +17,7 @@ from uagents_core.contrib.protocols.chat import ChatAcknowledgement, ChatMessage
 os.environ["AGENTVERSE_MAILBOX"] = "0"  # local rehearsal: no Agentverse connection needed
 
 from agents.homie_agent import homie  # noqa: E402
-from agents.specialists import caller, negotiator, paperwork, policy, repairs
+from agents.specialists import caller, negotiator, paperwork, pictures, policy, repairs
 
 DEMO = ("I move to Ann Arbor on Aug 20. One-bedroom under $1,400. No SSN. "
         "Book it if there's a month free. Spend at most $300 on fees.")
@@ -50,4 +50,4 @@ async def ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
 
 
 if __name__ == "__main__":
-    Bureau(agents=[homie, caller, negotiator, paperwork, repairs, policy, student], port=8001).run()
+    Bureau(agents=[homie, caller, negotiator, paperwork, repairs, policy, pictures, student], port=8001).run()

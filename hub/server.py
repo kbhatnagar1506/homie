@@ -12,13 +12,18 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
-from homie.config import load_buildings
+from homie.config import ROOT, load_buildings
 
 STATIC = Path(__file__).parent / "static"
+(ROOT / "data" / "shots").mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Homie hub")
+app.mount("/photos", StaticFiles(directory=STATIC / "photos"), name="photos")
+app.mount("/avatars", StaticFiles(directory=ROOT / "relay_app" / "avatars"), name="avatars")
+app.mount("/shots", StaticFiles(directory=ROOT / "data" / "shots"), name="shots")
 subscribers: set[asyncio.Queue] = set()
 
 
@@ -56,6 +61,28 @@ def dashboard():
 @app.get("/site")
 def site():
     return FileResponse(STATIC / "site.html")
+
+
+@app.get("/site/listing/{building_id}", response_class=HTMLResponse)
+def listing(building_id: str):
+    b = next((b for b in load_buildings() if b["id"] == building_id), None)
+    if not b:
+        raise HTTPException(404)
+    m = b["mock"]
+    shots = "".join(f'<img src="/photos/{b["id"]}_{k}.jpg" alt="{k}">' for k in ("living", "bedroom", "kitchen"))
+    return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{b["name"]} · 1 Bed</title><style>
+body{{margin:0;font:16px/1.5 -apple-system,Helvetica,sans-serif;background:#fff;color:#1d1d1f}}
+.hero{{position:relative;height:420px;background:url(/photos/{b["id"]}_exterior.jpg) center/cover}}
+.hero div{{position:absolute;left:0;right:0;bottom:0;padding:24px 32px;background:linear-gradient(transparent,rgba(0,0,0,.75));color:#fff}}
+.hero h1{{margin:0;font-size:36px}} .grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px}}
+.grid img{{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px}}
+.facts{{display:flex;gap:28px;padding:16px 32px;font-size:18px}} .facts b{{display:block;font-size:26px}}
+.note{{padding:0 32px 24px;color:#666;font-size:13px}}</style></head><body>
+<div class="hero"><div><h1>{b["name"]}</h1>{b["address"]}</div></div>
+<div class="facts"><div><b>${m["price"]}</b>/month</div><div><b>1 bd</b>1 bath</div><div><b>{m["discount"]}</b>current special</div></div>
+<div class="grid">{shots}</div>
+<div class="note">Demo listing on the Homie test site. Photos are illustrative.</div></body></html>"""
 
 
 @app.get("/api/state")

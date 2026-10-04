@@ -13,8 +13,9 @@ from homie import hub_client as hub
 from homie.calls import place_call
 from homie.events import team_post
 from homie.llm import complete_text
+from homie.screenshots import screenshot
 from homie.rpc import ask, resolve
-from homie.config import ROOT, env, load_buildings, seed
+from homie.config import PUBLIC_URL, ROOT, env, load_buildings, seed
 from homie.models import (
     CallRequest,
     CallResult,
@@ -24,6 +25,8 @@ from homie.models import (
     PolicyResult,
     PaperworkRequest,
     PaperworkResult,
+    PicturesRequest,
+    PicturesResult,
     RepairRequest,
     RepairResult,
 )
@@ -33,10 +36,14 @@ BUILDINGS = {b["id"]: b for b in load_buildings()}
 MAILBOX = env("AGENTVERSE_MAILBOX", "1") == "1"
 
 
+AVATARS = {"caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
+
+
 def specialist(role: str, description: str, concurrent: bool = True) -> Agent:
     return Agent(
         name=f"homie-{role}", seed=seed(role), mailbox=MAILBOX, handle_messages_concurrently=concurrent,
         description=description, readme_path=str(ROOT / "docs" / "agents" / f"{role}.md"),
+        avatar_url=f"{PUBLIC_URL}/avatars/{AVATARS[role]}.png",
     )
 
 
@@ -45,6 +52,7 @@ negotiator = specialist("negotiator", "Negotiates apartment offers using competi
 paperwork = specialist("paperwork", "No-SSN rental paperwork: documents, applications, cashier's-check plans. Part of Homie.", concurrent=False)
 repairs = specialist("repairs", "Files repairs, calls the office, retries and emails until it is booked. Part of Homie.")
 policy = specialist("policy", "Plain-English lease and tenant-rights help for Ann Arbor and Michigan renters. Part of Homie.")
+pictures = specialist("pictures", "Opens apartment listings in a real browser and sends screenshots. Part of Homie.")
 
 CALL_TIMEOUT = 300
 
@@ -192,6 +200,23 @@ async def on_policy(ctx: Context, sender: str, req: PolicyRequest):
                                  fallback="I couldn't reach my legal notes just now. For anything urgent, Michigan Legal Help (michiganlegalhelp.org) is free.")
     await hub.log_event("Policy question answered")
     await ctx.send(sender, PolicyResult(request_id=req.request_id, answer=answer))
+
+
+# ---------- Pictures ----------
+
+@pictures.on_message(PicturesRequest, replies=PicturesResult)
+async def on_pictures(ctx: Context, sender: str, req: PicturesRequest):
+    targets = [(req.url, "that listing")] if req.url else [
+        (f"{PUBLIC_URL}/site/listing/{b}", BUILDINGS[b]["name"]) for b in req.building_ids if b in BUILDINGS]
+    images = []
+    for url, label in targets:
+        name = await screenshot(url)
+        if name:
+            images.append(f"{PUBLIC_URL}/shots/{name}")
+    if images:
+        team_post("pics", f"Screenshots of {', '.join(label for _, label in targets)}.", images)
+    await hub.log_event(f"Pics: {len(images)} screenshot(s)")
+    await ctx.send(sender, PicturesResult(request_id=req.request_id, images=images))
 
 
 @negotiator.on_message(CallResult)

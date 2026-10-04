@@ -23,6 +23,7 @@ def seed(name: str) -> str:
 
 
 HUB_URL = env("HUB_URL", "http://localhost:8080")
+PUBLIC_URL = env("PUBLIC_URL", HUB_URL)  # where phones and Agentverse can load images from
 MOCK_CALLS = env("MOCK_CALLS", "1") == "1"
 
 LLM_PROVIDER = env("LLM_PROVIDER", "vertex")  # "vertex" (Gemini, service-account auth) or "openai" (any OpenAI-compatible API)

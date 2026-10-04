@@ -25,9 +25,9 @@ from uagents_core.contrib.protocols.payment import (
     payment_protocol_spec,
 )
 
-from agents.specialists import BUILDINGS, caller, negotiator, paperwork, policy, repairs
+from agents.specialists import BUILDINGS, caller, negotiator, paperwork, pictures, policy, repairs
 from homie import hub_client as hub
-from homie.config import ROOT, env, seed
+from homie.config import PUBLIC_URL, ROOT, env, seed
 from homie.llm import parse_intent
 from homie.rpc import ask, resolve
 from homie.models import (
@@ -37,6 +37,8 @@ from homie.models import (
     NegotiateResult,
     PaperworkRequest,
     PaperworkResult,
+    PicturesRequest,
+    PicturesResult,
     PolicyRequest,
     PolicyResult,
     RepairRequest,
@@ -55,6 +57,7 @@ homie = Agent(
         "holds the unit, and chases repairs after you move in. Ann Arbor."
     ),
     readme_path=str(ROOT / "docs" / "agentverse_readme.md"),
+    avatar_url=f"{PUBLIC_URL}/avatars/homie.png",
 )
 
 chat = Protocol(spec=chat_protocol_spec)
@@ -142,6 +145,8 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
     await hub.step("offers", "done", f"{len(offers)} offers")
     lines = "\n".join(f"- {BUILDINGS[o['building_id']]['name']}: ${o['price']}, {o.get('discount') or 'no discount'}" for o in offers)
     await say(ctx, sender, f"Offers so far:\n{lines}\n\nCalling the best two back to negotiate.")
+    top = [o["building_id"] for o in sorted(offers, key=lambda o: o["price"])[:3]]
+    asyncio.ensure_future(ask(ctx, pictures.address, PicturesRequest(building_ids=top), 120))  # Pics screenshots them meanwhile
 
     # 2. Negotiate (Negotiator agent, which hires the Caller again).
     neg = await ask(ctx, negotiator.address, NegotiateRequest(offers=offers, want_free_month=bool(req.get("require_free_month"))), CALL_TIMEOUT * 2)
@@ -272,6 +277,7 @@ async def on_reject(ctx: Context, sender: str, msg: RejectPayment):
 @homie.on_message(PaperworkResult)
 @homie.on_message(RepairResult)
 @homie.on_message(PolicyResult)
+@homie.on_message(PicturesResult)
 async def on_specialist_reply(ctx: Context, sender: str, msg):
     resolve(msg)
 

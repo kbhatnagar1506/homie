@@ -78,3 +78,14 @@ class PolicyRequest(Model):
 class PolicyResult(Model):
     request_id: str = ""
     answer: str
+
+
+class PicturesRequest(Model):
+    request_id: str = ""
+    building_ids: list[str] = []
+    url: str | None = None
+
+
+class PicturesResult(Model):
+    request_id: str = ""
+    images: list[str] = []
