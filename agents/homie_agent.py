@@ -17,6 +17,7 @@ from uagents_core.contrib.protocols.chat import (
     chat_protocol_spec,
 )
 from uagents_core.contrib.protocols.payment import (
+    CancelPayment,
     CommitPayment,
     CompletePayment,
     Funds,
@@ -126,6 +127,8 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
         await handle_policy(ctx, sender, text)
     elif intent["intent"] == "status":
         await say(ctx, sender, await status_line(), end=True)
+    elif intent["intent"] == "keys":
+        await handle_keys(ctx, sender)
     elif intent["intent"] == "schedule":
         last = ctx.storage.get(f"lastreq:{sender}") or {}
         res = await ask(ctx, later.address, ScheduleRequest(text=text, payload={"sender": sender, "req": last}), 40)
@@ -394,9 +397,7 @@ async def finalize(ctx: Context, sender: str, best: dict, offers: list[dict], re
     await say(ctx, sender,
               f"Held at {name}, ${best['price']}/mo{deal(best)}.{f' You saved ${saved:,}.' if saved > 0 else ''}\n\n"
               f"No SSN needed. They accept: {docs}. Show me those on a video call and I'll send the application.\n\n"
-              f"{plan}\n\nYou only pay Homie when you get your keys.", end=not _payments_on(sender))
-    if _payments_on(sender):
-        await request_fee(ctx, sender, best["building_id"])
+              f"{plan}\n\nYou only pay Homie when you get your keys. Text me \"I got my keys\" when you do.", end=True)
 
 
 async def status_line() -> str:
@@ -420,6 +421,26 @@ async def handle_repair(ctx: Context, sender: str, req: dict) -> None:
         await say(ctx, sender, f"Ticket {result.ticket_id}. {result.note}", end=True)
     else:
         await say(ctx, sender, "The office isn't responding yet. I'll keep chasing and tell you when it's booked.", end=True)
+
+
+async def handle_keys(ctx: Context, sender: str) -> None:
+    """'You only pay when you get your keys': this is that moment."""
+    from homie import payments
+    from homie.events import team_post
+
+    home = ctx.storage.get(f"home:{sender}")
+    place = BUILDINGS.get(home, {}).get("name") if home else None
+    await hub.step("keys", "active", "Keys in hand, collecting Homie's fee")
+    team_post("homie", f"🔑 KEYS! {('Welcome home at ' + place) if place else 'Welcome home'}! Team, we did it.")
+    await mapi.remember(f"They got their keys{(' at ' + place) if place else ''}.", tags=["activity", "homie", "home"], source="homie")
+    if name_of(sender) == "homie-relay-bridge":
+        await say(ctx, sender, f"[[PAY]] Congrats on the keys{(' at ' + place) if place else ''}! 🎉 As promised, you only pay now: "
+                               f"Homie's fee is ${payments.fee_usd_cents() / 100:.2f}.")
+    elif _payments_on(sender):
+        await say(ctx, sender, f"Congrats on the keys! 🎉 As promised, you only pay now: {payments.fee_fet()} FET. Sending the request.")
+        await request_fee(ctx, sender, home or "keys")
+    else:
+        await say(ctx, sender, "Congrats on the keys! 🎉 Welcome home.", end=True)
 
 
 async def handle_policy(ctx: Context, sender: str, question: str) -> None:
@@ -456,16 +477,25 @@ async def request_fee(ctx: Context, sender: str, building_id: str) -> None:
         recipient=str(homie.wallet.address()),
         deadline_seconds=3600,
         reference=f"keys-{building_id}",
-        description="Homie fee, due when you get your keys",
+        description="Homie fee: you got your keys",
     ))
 
 
 @payments.on_message(CommitPayment)
 async def on_commit(ctx: Context, sender: str, msg: CommitPayment):
-    ctx.logger.info(f"Payment committed: {msg.transaction_id}")
+    """Verify the FET transfer on Fetch mainnet before confirming."""
+    from homie import payments as pay
+
+    ok, detail = await pay.verify_fet_transfer(msg.transaction_id, str(homie.wallet.address()), float(pay.fee_fet()))
+    await hub.log_event(f"Payment {msg.transaction_id[:12]}…: {detail}")
+    if not ok:
+        await ctx.send(sender, CancelPayment(transaction_id=msg.transaction_id, reason=detail))
+        await say(ctx, sender, f"I couldn't verify that payment: {detail}. No worries, try again when you're ready.", end=True)
+        return
     await ctx.send(sender, CompletePayment(transaction_id=msg.transaction_id))
-    await hub.step("keys", "done", "Paid on keys")
-    await say(ctx, sender, "Payment received. Welcome home.", end=True)
+    await hub.step("keys", "done", f"Paid on keys · {detail}")
+    await mapi.remember(f"They paid Homie's fee ({detail}).", tags=["activity", "payment"], source="homie")
+    await say(ctx, sender, f"Payment verified on the Fetch network ({detail}). Thank you, and welcome home! 🏡", end=True)
 
 
 @payments.on_message(RejectPayment)

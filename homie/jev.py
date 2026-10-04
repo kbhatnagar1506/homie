@@ -82,6 +82,7 @@ ROUTES = {
     "memory": "They ask what Homie knows about them, or tell it something to remember",
     "pictures": "They want photos or screenshots of a listing",
     "schedule": "They want Homie to do something later, at a time or day, or to remind them",
+    "keys": "They say they got their keys, moved in, or signed the lease",
     "chat": "Greeting, thanks, small talk or anything else",
 }
 BEDROOMS = {"unspecified": "They did not say how many bedrooms", "studio": "A studio", "one": "One bedroom",

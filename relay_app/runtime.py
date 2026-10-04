@@ -191,6 +191,14 @@ class RelayTeam:
         role, chat_id = self.route or ("homie", self._chat_for("homie"))
         if not chat_id:
             return
+        if text.startswith("[[PAY]]"):
+            from homie import payments
+
+            await self.send("homie", chat_id, await self.in_voice("homie", text[7:].strip()))
+            result = await payments.relay_card(self.relays["homie"], chat_id, "Homie fee: keys in hand")
+            if result != "sent":
+                await self.send("homie", chat_id, "Payments aren't switched on in Relay yet, so this one's on the house. 🏡")
+            return
         if text.rstrip().endswith("Approve?"):
             self.awaiting_approval = True
             await self.send("homie", chat_id, await self.in_voice("homie", text), buttons=["Approve", "Keep looking"])
@@ -227,6 +235,9 @@ class RelayTeam:
             data = event["data"]
             if event["event_type"] == "message.received" and data.get("direction") == "inbound":
                 await self._on_message(role, data)
+            elif event["event_type"] == "payment.succeeded" and role == "homie":
+                await hub.step("keys", "done", "Paid on keys (Relay card)")
+                events.team_post("homie", "💸 Payment received for Homie's fee. Thank you, and welcome home!")
             elif event["event_type"] == "contact.added":
                 await self.ensure_team_chat()
             elif event["event_type"] == "call.created" and data["call"].get("status") == "ringing" \
