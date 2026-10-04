@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Homie Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg:#07090d; --panel:#0e121a; --line:rgba(150,170,200,.16); --ink:#eef2f7; --dim:#8692a6; --g:#3dffa0; --b:#6ab8ff; --o:#ffb547; --p:#b59bff; }
+  * { box-sizing:border-box; margin:0; }
+  body { width:1600px; height:1000px; background:var(--bg); color:var(--ink); font-family:Inter,sans-serif; position:relative; overflow:hidden;
+         background-image:linear-gradient(rgba(120,160,200,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,160,200,.05) 1px,transparent 1px); background-size:32px 32px; }
+  h1 { position:absolute; left:48px; top:36px; font-size:34px; font-weight:800; letter-spacing:-.02em; }
+  h1 span { color:var(--g); }
+  .sub { position:absolute; left:50px; top:84px; color:var(--dim); font-size:16px; }
+  .stats { position:absolute; left:48px; top:800px; display:flex; gap:12px; }
+  .stat { border:1px solid var(--line); background:var(--panel); border-radius:12px; padding:10px 16px; text-align:left; min-width:150px; }
+  .stat b { display:block; font-size:22px; font-weight:800; } .stat small { color:var(--dim); font-size:11.5px; font-family:"JetBrains Mono",monospace; }
+  .box { position:absolute; border:1px solid var(--line); background:var(--panel); border-radius:14px; padding:12px 14px; }
+  .box .t { font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; } .box .d { color:var(--dim); font-size:12px; margin-top:4px; line-height:1.4; }
+  .box img { width:30px; height:30px; border-radius:8px; }
+  .tag { font-family:"JetBrains Mono",monospace; font-size:10px; padding:2px 6px; border-radius:6px; border:1px solid var(--line); color:var(--dim); margin-left:auto; }
+  .lane { position:absolute; font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.16em; color:var(--dim); text-transform:uppercase; }
+  .core { border-color:rgba(106,184,255,.6); box-shadow:0 0 40px rgba(106,184,255,.15); }
+  .live { border-color:rgba(61,255,160,.55); box-shadow:0 0 30px rgba(61,255,160,.12); }
+  .step { position:absolute; width:26px; height:26px; border-radius:50%; background:var(--g); color:#05070a; font-weight:800; font-size:13px; display:grid; place-items:center; }
+  svg { position:absolute; inset:0; }
+  .foot { position:absolute; left:48px; right:48px; bottom:28px; display:flex; gap:10px; flex-wrap:wrap; }
+  .chip { font-size:12px; padding:6px 10px; border-radius:99px; border:1px solid var(--line); background:var(--panel); color:#cfd6e2; }
+  .chip b { color:var(--ink); }
+</style>
+</head>
+<body>
+<h1>Homie <span>·</span> an 11-agent team that's your person in America</h1>
+<div class="sub">One text on Relay or ASI:One → buildings found, sites read, swiped, called, negotiated, held, applied. Every arrow below is a real message between Fetch.ai uAgents.</div>
+<div class="stats">
+  <div class="stat"><b>11</b><small>uAgents on Agentverse</small></div>
+  <div class="stat"><b>~1s</b><small>voice reply latency</small></div>
+  <div class="stat"><b>33s</b><small>to swipe deck</small></div>
+  <div class="stat"><b>185s</b><small>text → app + fee</small></div>
+</div>
+
+<svg viewBox="0 0 1600 1000">
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#6ab8ff"/></marker>
+    <marker id="g" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#3dffa0"/></marker>
+  </defs>
+  <g fill="none" stroke-width="1.6">
+    <path d="M300,300 C360,300 360,420 420,420" stroke="#6ab8ff" marker-end="url(#a)"/>
+    <path d="M300,500 C360,500 360,440 420,440" stroke="#6ab8ff" marker-end="url(#a)"/>
+    <path d="M700,430 C760,430 760,205 820,205" stroke="#3dffa0" stroke-dasharray="5 6" marker-end="url(#g)"/>
+    <path d="M700,430 C760,430 760,305 820,305" stroke="#3dffa0" stroke-dasharray="5 6" marker-end="url(#g)"/>
+    <path d="M700,430 C760,430 760,405 820,405" stroke="#3dffa0" stroke-dasharray="5 6" marker-end="url(#g)"/>
+    <path d="M700,440 C760,440 760,505 820,505" stroke="#3dffa0" stroke-dasharray="5 6" marker-end="url(#g)"/>
+    <path d="M700,445 C760,445 760,605 820,605" stroke="#3dffa0" stroke-dasharray="5 6" marker-end="url(#g)"/>
+    <path d="M700,450 C760,450 760,705 820,705" stroke="#3dffa0" stroke-dasharray="5 6" marker-end="url(#g)"/>
+    <path d="M1130,405 L1190,405" stroke="#ffb547" marker-end="url(#a)"/>
+    <path d="M1130,205 L1190,205" stroke="#ffb547" marker-end="url(#a)"/>
+    <path d="M1130,705 L1190,705" stroke="#ffb547" marker-end="url(#a)"/>
+    <path d="M560,520 L560,600" stroke="#b59bff" marker-end="url(#a)"/>
+  </g>
+</svg>
+
+<div class="lane" style="left:50px;top:150px">You</div>
+<div class="box" style="left:48px;top:250px;width:252px"><div class="t">📱 Relay app</div><div class="d">Group chat with 7 agent contacts, swipe & live-call cards, video calls with a Veo figurine</div></div>
+<div class="box" style="left:48px;top:450px;width:252px"><div class="t">✦ ASI:One <span class="tag">@homie-usa</span></div><div class="d">Chat Protocol + Payment Protocol (fee in FET, verified on-chain)</div></div>
+
+<div class="lane" style="left:422px;top:150px">Orchestrator</div>
+<div class="box core" style="left:420px;top:370px;width:280px"><div class="t"><img src="../relay_app/avatars/homie.png">Homie <span class="tag">uAgent</span></div>
+  <div class="d">Plans, delegates over request-id RPC (many calls in flight). Jev (TypeSafe) makes every decision as a typed question with a confidence gate; Gemini writes every word.</div></div>
+<div class="box" style="left:420px;top:600px;width:280px"><div class="t"><img src="../relay_app/avatars/memory.png">Memory · Mapi</div><div class="d">Per-user memory every agent reads before it speaks</div></div>
+
+<div class="lane" style="left:822px;top:150px">Specialists (in order)</div>
+<div class="step" style="left:790px;top:192px">1</div><div class="box" style="left:820px;top:175px;width:310px"><div class="t"><img src="../relay_app/avatars/scout.png">Scout</div><div class="d">Reads every building's site: prices, specials, hours, no-SSN rules</div></div>
+<div class="step" style="left:790px;top:292px">2</div><div class="box" style="left:820px;top:275px;width:310px"><div class="t"><img src="../relay_app/avatars/vibecheck.png">Vibecheck</div><div class="d">Swipe deck from Scout's facts; learns taste, shortlists</div></div>
+<div class="step" style="left:790px;top:392px">3</div><div class="box live" style="left:820px;top:375px;width:310px"><div class="t"><img src="../relay_app/avatars/calls.png">Calls <span class="tag">LIVE</span></div><div class="d">Calls every liked office in parallel; asks when specials apply</div></div>
+<div class="step" style="left:790px;top:492px">4</div><div class="box" style="left:820px;top:475px;width:310px"><div class="t"><img src="../relay_app/avatars/later.png">Later</div><div class="d">Books callbacks for the exact special day; survives restarts</div></div>
+<div class="step" style="left:790px;top:592px">5</div><div class="box" style="left:820px;top:575px;width:310px"><div class="t"><img src="../relay_app/avatars/negotiator.png">Negotiator</div><div class="d">Scores offers (Jev) and plays the best against the rest</div></div>
+<div class="step" style="left:790px;top:692px">6</div><div class="box live" style="left:820px;top:675px;width:310px"><div class="t"><img src="../relay_app/avatars/papers.png">Papers <span class="tag">LIVE</span></div><div class="d">No-SSN checklist, then the application in a live browser</div></div>
+
+<div class="lane" style="left:1192px;top:150px">Under the hood</div>
+<div class="box" style="left:1190px;top:175px;width:360px"><div class="t">🌐 Playwright · Places · cache</div><div class="d">Real sites, real screenshots; cached demo cities answer instantly</div></div>
+<div class="box live" style="left:1190px;top:345px;width:360px"><div class="t">🎙 ElevenLabs Agent ⇄ Twilio</div><div class="d">μ-law 8 kHz passthrough bridge, no transcoding. Audio tapped so /flow can play every call live, stereo-panned.</div></div>
+<div class="box live" style="left:1190px;top:665px;width:360px"><div class="t">🖥 Browser Use Cloud</div><div class="d">Live browser embedded in mission control; stops before password & submit on real sites</div></div>
+<div class="box" style="left:1190px;top:505px;width:360px"><div class="t">🛠 Fix · Policy · Pics</div><div class="d">Video-call repairs (Pipecat + Gemini vision + Veo figurine), tenant law, listing screenshots</div></div>
+
+<div class="foot">
+  <span class="chip"><b>Fetch.ai</b> uAgents · Agentverse · ASI:One · Chat + Payment Protocol</span>
+  <span class="chip"><b>Relay</b> agents as contacts · rich cards · video calls</span>
+  <span class="chip"><b>ElevenLabs</b> voice agent · TTS · STT · SFX</span>
+  <span class="chip"><b>Gemini & Veo</b> on Vertex</span>
+  <span class="chip"><b>Jev</b> typed decisions</span>
+  <span class="chip"><b>Browser Use</b> live applications</span>
+  <span class="chip"><b>Cloud Run</b> one container, all agents</span>
+</div>
+</body>
+</html>
