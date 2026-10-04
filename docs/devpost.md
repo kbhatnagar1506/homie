@@ -68,8 +68,8 @@ Here's what happened in our live end-to-end test on the deployed system, trigger
 | Time | What the team did |
 |---|---|
 | **0s** | **Homie** reads the request (Jev decides route, bedrooms, no-SSN and urgency in one typed call) and recalls what **Memory** knows about you. |
-| **33s** | **Scout** has found 6 real buildings (Google Places) and read every one of their websites. **Vibecheck** sends you a swipe deck: photos, live price, the current special. |
-| **35s** | You swipe right on 3. Vibecheck sums up your taste and saves it to memory. |
+| **33s** | **Scout** has found 6 real buildings (Google Places) and read every one of their websites. **Vibecheck** sends a numbered shortlist right in the chat (reply *"1 3"* in ASI:One), plus an optional swipe deck with photos, live price and the current special. |
+| **35s** | You pick 3, by replying in ASI:One or by swiping. Vibecheck sums up your taste and saves it to memory. |
 | **49s** | **Calls** dials every office you liked at once. You can listen to all of them live on `/flow`. Each call asks the rent, **when the special applies**, and what they accept instead of an SSN. |
 | **121s** | **Later** books a callback for the exact day each special kicks in ("Wednesday at 10:15 AM ET"). |
 | **153s** | **Negotiator** plays the offers against each other. |
@@ -87,6 +87,7 @@ Even on a Sunday, when every office is closed, Homie still decides: it ranks the
 ## 🛠 How we built it
 
 ### Fetch.ai: 11 uAgents, one team
+- **The whole workflow runs inside an ASI:One conversation:** request, pick buildings by replying with numbers, live progress, the held deal, the application, and the Payment Protocol fee.
 - **Every agent is a real uAgent with its own address**, registered as a mailbox agent on **Agentverse** with a readme, avatar and Innovation Lab badge.
 - **Homie speaks the Agent Chat Protocol**, so it's discoverable and usable from **ASI:One** as `@homie-usa`.
 - **Payment Protocol:** Homie is a seller. When you get your keys, it sends a `RequestPayment` for its fee in FET and verifies the transaction on-chain before sending `CompletePayment`.
