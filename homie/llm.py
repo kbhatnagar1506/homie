@@ -6,17 +6,42 @@ import re
 
 from openai import AsyncOpenAI
 
-from homie.config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
+from homie.config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_PROVIDER, VERTEX_LOCATION
 
 log = logging.getLogger(__name__)
-_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY) if LLM_API_KEY else None
+_static = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY) if LLM_API_KEY and LLM_PROVIDER != "vertex" else None
+_vertex: dict = {}
+
+
+def _client() -> AsyncOpenAI | None:
+    """Gemini on Vertex AI (service-account auth, token refreshed hourly) or any OpenAI-compatible API."""
+    if LLM_PROVIDER != "vertex":
+        return _static
+    try:
+        import google.auth
+        import google.auth.transport.requests
+
+        if "creds" not in _vertex:
+            _vertex["creds"], _vertex["project"] = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds = _vertex["creds"]
+        if not creds.valid:
+            creds.refresh(google.auth.transport.requests.Request())
+            _vertex["client"] = AsyncOpenAI(
+                base_url=f"https://{VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/{_vertex['project']}/locations/{VERTEX_LOCATION}/endpoints/openapi",
+                api_key=creds.token,
+            )
+        return _vertex["client"]
+    except Exception as e:
+        log.warning("Vertex auth failed: %s", e)
+        return None
 
 
 async def complete_json(system: str, user: str) -> dict | None:
-    if not _client:
+    client = _client()
+    if not client:
         return None
     try:
-        r = await _client.chat.completions.create(
+        r = await client.chat.completions.create(
             model=LLM_MODEL,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
             temperature=0,
@@ -30,10 +55,11 @@ async def complete_json(system: str, user: str) -> dict | None:
 
 
 async def complete_text(system: str, messages: list[dict], fallback: str = "") -> str:
-    if not _client:
+    client = _client()
+    if not client:
         return fallback
     try:
-        r = await _client.chat.completions.create(
+        r = await client.chat.completions.create(
             model=LLM_MODEL, messages=[{"role": "system", "content": system}, *messages], temperature=0.6,
         )
         return (r.choices[0].message.content or "").strip() or fallback

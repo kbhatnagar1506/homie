@@ -25,9 +25,11 @@ def seed(name: str) -> str:
 HUB_URL = env("HUB_URL", "http://localhost:8080")
 MOCK_CALLS = env("MOCK_CALLS", "1") == "1"
 
+LLM_PROVIDER = env("LLM_PROVIDER", "vertex")  # "vertex" (Gemini, service-account auth) or "openai" (any OpenAI-compatible API)
+VERTEX_LOCATION = env("VERTEX_LOCATION", "us-central1")
 LLM_BASE_URL = env("LLM_BASE_URL", "https://api.asi1.ai/v1")
 LLM_API_KEY = env("LLM_API_KEY")
-LLM_MODEL = env("LLM_MODEL", "asi1-mini")
+LLM_MODEL = env("LLM_MODEL", "google/gemini-2.5-flash" if LLM_PROVIDER == "vertex" else "asi1-mini")
 
 ELEVENLABS_API_KEY = env("ELEVENLABS_API_KEY")
 ELEVENLABS_AGENT_ID = env("ELEVENLABS_AGENT_ID")

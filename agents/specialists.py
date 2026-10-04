@@ -14,7 +14,7 @@ from homie.calls import place_call
 from homie.events import team_post
 from homie.llm import complete_text
 from homie.rpc import ask, resolve
-from homie.config import load_buildings, seed
+from homie.config import ROOT, env, load_buildings, seed
 from homie.models import (
     CallRequest,
     CallResult,
@@ -30,11 +30,21 @@ from homie.models import (
 
 BUILDINGS = {b["id"]: b for b in load_buildings()}
 
-caller = Agent(name="homie-caller", seed=seed("caller"), handle_messages_concurrently=True)
-negotiator = Agent(name="homie-negotiator", seed=seed("negotiator"), handle_messages_concurrently=True)
-paperwork = Agent(name="homie-paperwork", seed=seed("paperwork"))
-repairs = Agent(name="homie-repairs", seed=seed("repairs"), handle_messages_concurrently=True)
-policy = Agent(name="homie-policy", seed=seed("policy"), handle_messages_concurrently=True)
+MAILBOX = env("AGENTVERSE_MAILBOX", "1") == "1"
+
+
+def specialist(role: str, description: str, concurrent: bool = True) -> Agent:
+    return Agent(
+        name=f"homie-{role}", seed=seed(role), mailbox=MAILBOX, handle_messages_concurrently=concurrent,
+        description=description, readme_path=str(ROOT / "docs" / "agents" / f"{role}.md"),
+    )
+
+
+caller = specialist("caller", "Phones leasing offices for international students (ElevenLabs + Twilio), always disclosed as an AI. Part of Homie.")
+negotiator = specialist("negotiator", "Negotiates apartment offers using competing deals as leverage. Part of Homie.")
+paperwork = specialist("paperwork", "No-SSN rental paperwork: documents, applications, cashier's-check plans. Part of Homie.", concurrent=False)
+repairs = specialist("repairs", "Files repairs, calls the office, retries and emails until it is booked. Part of Homie.")
+policy = specialist("policy", "Plain-English lease and tenant-rights help for Ann Arbor and Michigan renters. Part of Homie.")
 
 CALL_TIMEOUT = 300
 

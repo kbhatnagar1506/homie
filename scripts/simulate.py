@@ -14,7 +14,7 @@ from uuid import uuid4
 from uagents import Agent, Bureau, Context
 from uagents_core.contrib.protocols.chat import ChatAcknowledgement, ChatMessage, TextContent
 
-os.environ["HOMIE_MAILBOX"] = "0"  # local rehearsal: no Agentverse connection needed
+os.environ["AGENTVERSE_MAILBOX"] = "0"  # local rehearsal: no Agentverse connection needed
 
 from agents.homie_agent import homie  # noqa: E402
 from agents.specialists import caller, negotiator, paperwork, policy, repairs

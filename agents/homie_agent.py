@@ -46,7 +46,7 @@ from homie.models import (
 homie = Agent(
     name="homie",
     seed=seed("homie"),
-    mailbox=env("HOMIE_MAILBOX", "1") == "1",
+    mailbox=env("AGENTVERSE_MAILBOX", env("HOMIE_MAILBOX", "1")) == "1",
     handle_messages_concurrently=True,
     description=(
         "Homie is your person in America. It finds and secures US apartments for international students: "
