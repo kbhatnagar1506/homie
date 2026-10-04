@@ -12,7 +12,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -31,7 +31,7 @@ def fresh_state() -> dict:
     return {
         "request": {},
         "clock_day": 1,
-        "offers": {b["id"]: {"building_id": b["id"], "name": b["name"], "address": b["address"], "status": "waiting"} for b in load_buildings()},
+        "offers": {},
         "checklist": {},
         "application": None,
         "repairs": [],
@@ -120,6 +120,65 @@ async def reset(body: dict):
     return {"ok": True}
 
 
+@app.post("/api/buildings")
+async def buildings(body: dict):
+    state["offers"] = {b["id"]: {"building_id": b["id"], "name": b["name"], "address": b.get("address", ""),
+                                 "phone": b.get("phone_display") or b.get("phone"), "rating": b.get("rating"),
+                                 "website": b.get("website"), "open_now": b.get("open_now"), "status": "waiting"}
+                       for b in body.get("buildings", [])}
+    log(f"Found {len(state['offers'])} buildings")
+    await publish()
+    return {"ok": True}
+
+
+@app.post("/api/transcript")
+async def transcript(body: dict):
+    offer = state["offers"].setdefault(body["building_id"], {"building_id": body["building_id"]})
+    offer.setdefault("transcript", []).append(body["line"])
+    offer["transcript"] = offer["transcript"][-8:]
+    await publish()
+    return {"ok": True}
+
+
+# ---------- real phone calls (Twilio media streams + Gemini Live) ----------
+
+@app.post("/api/calls")
+async def register_call(body: dict):
+    from homie import phone
+
+    return {"key": phone.register(body["building_id"], body["prompt"], body["greeting"])}
+
+
+@app.get("/api/calls/{key}/wait")
+async def wait_call(key: str, timeout: float = 300):
+    from homie import phone
+
+    return await phone.wait(key, timeout)
+
+
+@app.post("/twilio/status/{key}")
+async def twilio_status(key: str, request: Request):
+    from homie import phone
+
+    form = await request.form()
+    status = form.get("CallStatus")
+    if status in ("busy", "no-answer", "failed", "canceled"):
+        phone.finish(key, answered=False, status=status)
+        log(f"Call {status}")
+        await publish()
+    return {"ok": True}
+
+
+@app.websocket("/twilio/stream/{key}")
+async def twilio_stream(websocket: WebSocket, key: str):
+    from homie import phone
+
+    async def on_line(building_id: str, line: str):
+        await transcript({"building_id": building_id, "line": line})
+
+    await phone.stream(websocket, key, lambda b, l: asyncio.ensure_future(on_line(b, l)))
+
+
 @app.post("/api/checklist")
 async def checklist(body: dict):
     state["checklist"][body["step"]] = {"status": body["status"], "detail": body.get("detail", "")}
@@ -147,7 +206,7 @@ async def add_log(body: dict):
 
 @app.post("/api/application")
 async def application(body: dict):
-    state["application"] = {**body, "unit": "4B", "updated": time.strftime("%H:%M:%S")}
+    state["application"] = {**body, "updated": time.strftime("%H:%M:%S")}
     log(f"Application {body.get('status')} at {state['offers'].get(body['building_id'], {}).get('name')}")
     await publish()
     return {"ok": True}

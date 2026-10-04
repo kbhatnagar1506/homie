@@ -70,7 +70,7 @@ async def complete_text(system: str, messages: list[dict], fallback: str = "") -
 
 INTENT_PROMPT = """Extract an apartment request into JSON with keys:
 intent ("search" | "repair" | "policy" | "status" | "other"; "policy" means a question about a lease, deposit,
-tenant rights, landlord rules or the law), city, move_in (string), beds (int),
+tenant rights, landlord rules or the law), city, area (neighborhood + city, e.g. \"downtown Atlanta, GA\"), move_in (string), beds (int),
 max_rent (int), no_ssn (bool), require_free_month (bool), fee_cap (int), issue (string, repairs only).
 Use null for anything not stated. Reply with JSON only."""
 
@@ -89,7 +89,8 @@ def fallback_intent(text: str) -> dict:
     search = any(w in t for w in ("apartment", "bedroom", "move", "rent", "lease"))
     return {
         "intent": "repair" if repair else ("policy" if policy else ("search" if search else "other")),
-        "city": "Ann Arbor" if "ann arbor" in t else None,
+        "city": "Atlanta, GA" if "atlanta" in t else ("Ann Arbor, MI" if "ann arbor" in t else None),
+        "area": "downtown Atlanta, GA" if ("downtown" in t or "dwntwn" in t) and "atlanta" in t else None,
         "move_in": (re.search(r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\.?\s+\d{1,2}", t) or [None])[0],
         "beds": 2 if "two-bed" in t or "2 bed" in t else 1,
         "max_rent": money[0] if money else None,

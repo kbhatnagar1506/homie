@@ -18,7 +18,8 @@ from relaymessenger.websocket import run_websocket
 
 from homie import events, memory
 from homie import hub_client as hub
-from homie.config import PUBLIC_URL, ROOT, env, load_buildings
+from homie.buildings import BUILDINGS, listing_url
+from homie.config import ROOT, env
 from homie.screenshots import screenshot
 from homie.llm import complete_text, parse_intent
 from relay_app.team import GROUP_NAME, TEAM
@@ -200,10 +201,10 @@ class RelayTeam:
         url = re.search(r"https?://\S+", text)
         lowered = text.lower()
         targets = [(url.group(0), "that listing")] if url else [
-            (f"{PUBLIC_URL}/site/listing/{b['id']}", b["name"]) for b in load_buildings()
+            (listing_url(b), b["name"]) for b in BUILDINGS.values()
             if b["name"].lower().split()[0] in lowered or b["id"].replace("_", " ") in lowered]
         if not targets:
-            reply = await complete_text(TEAM["pics"].voice, [{"role": "user", "content": text + "\n(You can screenshot any listing link they send, or Maple Court, Arbor Lofts, Kerrytown Place, State Street Commons.)"}],
+            reply = await complete_text(TEAM["pics"].voice, [{"role": "user", "content": text + "\n(You can screenshot any listing link they send, or any building from the current search.)"}],
                                         fallback="Send me a listing link or a building name and I'll screenshot it.")
             await self.send("pics", chat_id, reply)
             return
@@ -211,7 +212,7 @@ class RelayTeam:
             await self.relays["pics"].chats.set_activity(chat_id, text="Taking screenshots", emoji="📸")
         except Exception:
             pass
-        images = [f"{PUBLIC_URL}/shots/{n}" for n in [await screenshot(u) for u, _ in targets[:3]] if n]
+        images = [f"{env('PUBLIC_URL')}/shots/{n}" for n in [await screenshot(u) for u, _ in targets[:3]] if n]
         caption = await self.in_voice("pics", f"Screenshots of {', '.join(label for _, label in targets[:3])}." if images else "That page wouldn't load for me. Try another link?")
         await self.send("pics", chat_id, caption, extra=[{"type": "media", "url": u} for u in images])
 

@@ -3,7 +3,7 @@
 Homie finds and secures a US apartment for international students, from anywhere in the world.
 
 **Ask it things like:**
-- "I move to Ann Arbor on Aug 20. One-bedroom under $1,400. No SSN. Book it if there's a month free."
+- "I move to downtown Atlanta on Aug 20. One-bedroom under $1,400. No SSN. Book it if there's a month free."
 - "My ice maker is broken."
 
 **What it does:**
@@ -16,6 +16,6 @@ Homie finds and secures a US apartment for international students, from anywhere
 
 You only pay when you get your keys.
 
-**Keywords:** apartment, rent, lease, international student, F-1, no SSN, guarantor, cashier's check, leasing office, repairs, maintenance, Ann Arbor, University of Michigan.
+**Keywords:** apartment, rent, lease, international student, F-1, no SSN, guarantor, cashier's check, leasing office, repairs, maintenance, Atlanta, downtown Atlanta, Georgia Tech, Georgia State.
 
 Built for MHacks 2026 with Fetch.ai uAgents (5 agents), ASI:One, ElevenLabs and Relay.

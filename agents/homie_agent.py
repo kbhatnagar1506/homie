@@ -25,10 +25,12 @@ from uagents_core.contrib.protocols.payment import (
     payment_protocol_spec,
 )
 
-from agents.specialists import BUILDINGS, caller, negotiator, paperwork, pictures, policy, repairs
+from agents.specialists import caller, negotiator, paperwork, pictures, policy, repairs
 from homie import hub_client as hub
 from homie.config import PUBLIC_URL, ROOT, env, seed
+from homie.buildings import BUILDINGS, use
 from homie.llm import parse_intent
+from homie.places import search_apartments
 from homie.rpc import ask, resolve
 from homie.models import (
     CallRequest,
@@ -54,7 +56,7 @@ homie = Agent(
     description=(
         "Homie is your person in America. It finds and secures US apartments for international students: "
         "calls every leasing office, negotiates discounts, finds out what they accept instead of an SSN, "
-        "holds the unit, and chases repairs after you move in. Ann Arbor."
+        "holds the unit, and chases repairs after you move in. Starting in downtown Atlanta."
     ),
     readme_path=str(ROOT / "docs" / "agentverse_readme.md"),
     avatar_url=f"{PUBLIC_URL}/avatars/homie.png",
@@ -116,17 +118,34 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
 
 
 async def handle_search(ctx: Context, sender: str, req: dict) -> None:
-    await hub.post("/api/reset", {"request": req})
+    area = req.get("area") or req.get("city") or env("DEFAULT_AREA", "downtown Atlanta, GA")
+    budget = req.get("max_rent")
+    beds = req.get("beds") or 1
+    await hub.post("/api/reset", {"request": {**req, "city": area}, "buildings": []})
     for s in STEPS:
         await hub.step(s, "todo")
-    budget = req.get("max_rent")
+    await hub.step("find", "active", f"Searching apartments in {area}")
+    if env("DEMO_BUILDINGS", "0") != "1":
+        try:
+            found = [b for b in await search_apartments(area, limit=12) if b.get("phone")]
+        except Exception as e:
+            ctx.logger.error(f"Places search failed: {e}")
+            found = []
+        if not found:
+            await hub.step("find", "blocked", "Search failed")
+            await say(ctx, sender, f"I couldn't search {area} just now. Try again in a minute.", end=True)
+            return
+        use(found[: int(env("MAX_CALLS", "6"))])
+    await hub.post("/api/buildings", {"buildings": list(BUILDINGS.values())})
+    open_now = sum(1 for b in BUILDINGS.values() if b.get("open_now"))
     await say(ctx, sender,
-              f"On it. Looking for a {req.get('beds') or 1}-bedroom in {req.get('city') or 'Ann Arbor'}"
-              f"{f' under ${budget}' if budget else ''}{' with no SSN' if req.get('no_ssn') else ''}. "
-              f"Calling {len(BUILDINGS)} buildings now. You can go to sleep.")
+              f"On it. Found {len(BUILDINGS)} buildings in {area}"
+              f"{f' ({open_now} open right now)' if any(b.get('real') for b in BUILDINGS.values()) else ''}. "
+              f"Calling them now{f', looking for a {beds}-bedroom under ${budget}' if budget else ''}"
+              f"{', no SSN' if req.get('no_ssn') else ''}. You can go to sleep.")
 
-    # 1. Find + call every building at once (Caller agent).
-    await hub.step("find", "done", f"{len(BUILDINGS)} buildings match")
+    # 1. Call every building at once (Caller agent).
+    await hub.step("find", "done", f"{len(BUILDINGS)} buildings in {area}")
     await hub.step("offers", "active", "Calling every building at once")
     replies = await asyncio.gather(*(
         ask(ctx, caller.address, CallRequest(building_id=b, purpose="quote", context={"move_in": req.get("move_in") or "August 20"}), CALL_TIMEOUT)
@@ -144,7 +163,8 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
         return
     await hub.step("offers", "done", f"{len(offers)} offers")
     lines = "\n".join(f"- {BUILDINGS[o['building_id']]['name']}: ${o['price']}, {o.get('discount') or 'no discount'}" for o in offers)
-    await say(ctx, sender, f"Offers so far:\n{lines}\n\nCalling the best two back to negotiate.")
+    simulated = "\n(Rehearsal: phone line not connected yet, so these numbers are simulated.)" if env("MOCK_CALLS", "1") == "1" else ""
+    await say(ctx, sender, f"Offers so far:\n{lines}{simulated}\n\nCalling the best two back to negotiate.")
     top = [o["building_id"] for o in sorted(offers, key=lambda o: o["price"])[:3]]
     asyncio.ensure_future(ask(ctx, pictures.address, PicturesRequest(building_ids=top), 120))  # Pics screenshots them meanwhile
 
@@ -193,11 +213,11 @@ async def finalize(ctx: Context, sender: str, best: dict, offers: list[dict], re
     plan = pw.payment_plan if isinstance(pw, PaperworkResult) else ""
 
     saved = _savings(best, offers)
-    await hub.step("held", "done", f"Unit 4B at {name}")
+    await hub.step("held", "done", f"Held at {name}")
     await hub.post("/api/session", {"sender": sender, "building_id": best["building_id"], "saved": saved})
     ctx.storage.set(f"home:{sender}", best["building_id"])
     await say(ctx, sender,
-              f"Held: Unit 4B at {name}, ${best['price']}/mo, {best.get('discount')}. You saved ${saved:,}.\n\n"
+              f"Held at {name}, ${best['price']}/mo, {best.get('discount')}. You saved ${saved:,}.\n\n"
               f"No SSN needed. They accept: {docs}. Show me those on a video call and I'll send the application.\n\n"
               f"{plan}\n\nYou only pay Homie when you get your keys.", end=not _payments_on())
     if _payments_on():

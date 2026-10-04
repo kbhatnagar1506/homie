@@ -41,4 +41,5 @@ def load_buildings() -> list[dict]:
     buildings = json.loads((ROOT / "data" / "buildings.json").read_text())
     for b in buildings:
         b["phone"] = env(f"PHONE_{b['id'].upper()}")
+        b["relay_handle"] = env(f"RELAY_OFFICE_{b['id'].upper()}")  # a teammate's Relay handle playing this office
     return buildings

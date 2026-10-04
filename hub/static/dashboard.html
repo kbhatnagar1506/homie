@@ -36,6 +36,7 @@
   .pill { display:inline-block; margin-top:10px; padding:3px 10px; border-radius:99px; font-size:12px; background:#1d242c; color:var(--dim); }
   .pill.calling { color:var(--amber); } .pill.matched, .pill.answered { color:var(--green); } .pill.noanswer { color:var(--red); }
   .meta { color:var(--dim); font-size:13px; margin-top:8px; }
+  .live { margin-top:10px; padding:8px 10px; border-radius:8px; background:#0e1216; font:12px/1.45 ui-monospace, Menlo, monospace; color:#b9c4cf; }
   .result { margin-top:16px; padding:16px; border-radius:12px; background:rgba(61,220,132,.08); border:1px solid rgba(61,220,132,.4); font-size:20px; display:none; }
   .log { font:13px/1.5 ui-monospace, Menlo, monospace; max-height:68vh; overflow:auto; }
   .log div { padding:4px 0; border-bottom:1px dashed var(--line); } .log span { color:var(--dim); margin-right:8px; }
@@ -83,7 +84,7 @@ setInterval(tick, 1000); tick();
 function render(s) {
   $("day").textContent = s.clock_day;
   const r = s.request || {};
-  $("req").textContent = r.city ? `${r.beds || 1}-bed · ${r.city}${r.max_rent ? " · under $" + r.max_rent : ""}${r.no_ssn ? " · no SSN" : ""}${r.move_in ? " · " + r.move_in : ""}` : "Waiting for a request in ASI:One…";
+  $("req").textContent = r.city ? `${r.beds || 1}-bed · ${r.city}${r.max_rent ? " · under $" + r.max_rent : ""}${r.no_ssn ? " · no SSN" : ""}${r.move_in ? " · " + r.move_in : ""}` : "Waiting for a request (ASI:One or Relay)…";
   $("steps").innerHTML = STEPS.map(([id, label], i) => {
     const st = (s.checklist || {})[id] || {};
     return `<div class="step ${st.status || ""}"><div class="dot">${st.status === "done" ? "✓" : i + 1}</div><div>${label}<small>${esc(st.detail)}</small></div></div>`;
@@ -97,12 +98,14 @@ function render(s) {
       <div class="price">${o.was ? `<s>$${o.was}</s>` : ""}${o.price ? "$" + o.price : "—"}</div>
       <div class="disc">${esc(o.discount)}</div>
       ${o.ssn_alternative ? `<div class="meta">No SSN: ${esc(o.ssn_alternative)}</div>` : ""}
+      ${o.phone ? `<div class="meta">${esc(o.phone)}${o.rating ? " · ★ " + o.rating : ""}${o.open_now === true ? " · open now" : o.open_now === false ? " · closed now" : ""}</div>` : ""}
+      ${(o.transcript || []).length ? `<div class="live">${o.transcript.slice(-3).map(l => `<div>${esc(l)}</div>`).join("")}</div>` : ""}
       <span class="pill ${cls}">${esc(o.status || "waiting")}</span></div>`;
   }).join("");
   if (bestId) {
     const b = s.offers[bestId];
     $("result").style.display = "block";
-    $("result").innerHTML = `Held: Unit 4B at <b>${esc(b.name)}</b>, ${esc(b.discount)}. You saved <b>$${(s.session.saved || 0).toLocaleString()}</b>.`;
+    $("result").innerHTML = `Held at <b>${esc(b.name)}</b>, ${esc(b.discount)}. You saved <b>$${(s.session.saved || 0).toLocaleString()}</b>.`;
   } else $("result").style.display = "none";
   $("log").innerHTML = (s.log || []).slice().reverse().map(l => `<div><span>${l.t}</span>${esc(l.text)}</div>`).join("");
 }

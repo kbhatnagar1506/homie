@@ -15,7 +15,8 @@ from homie.events import team_post
 from homie.llm import complete_text
 from homie.screenshots import screenshot
 from homie.rpc import ask, resolve
-from homie.config import PUBLIC_URL, ROOT, env, load_buildings, seed
+from homie.buildings import BUILDINGS, can_call_now, listing_url
+from homie.config import PUBLIC_URL, ROOT, env, seed
 from homie.models import (
     CallRequest,
     CallResult,
@@ -31,7 +32,6 @@ from homie.models import (
     RepairResult,
 )
 
-BUILDINGS = {b["id"]: b for b in load_buildings()}
 
 MAILBOX = env("AGENTVERSE_MAILBOX", "1") == "1"
 
@@ -51,7 +51,7 @@ caller = specialist("caller", "Phones leasing offices for international students
 negotiator = specialist("negotiator", "Negotiates apartment offers using competing deals as leverage. Part of Homie.")
 paperwork = specialist("paperwork", "No-SSN rental paperwork: documents, applications, cashier's-check plans. Part of Homie.", concurrent=False)
 repairs = specialist("repairs", "Files repairs, calls the office, retries and emails until it is booked. Part of Homie.")
-policy = specialist("policy", "Plain-English lease and tenant-rights help for Ann Arbor and Michigan renters. Part of Homie.")
+policy = specialist("policy", "Plain-English lease and tenant-rights help for Georgia and US renters. Part of Homie.")
 pictures = specialist("pictures", "Opens apartment listings in a real browser and sends screenshots. Part of Homie.")
 
 CALL_TIMEOUT = 300
@@ -62,6 +62,12 @@ CALL_TIMEOUT = 300
 @caller.on_message(CallRequest, replies=CallResult)
 async def on_call(ctx: Context, sender: str, req: CallRequest):
     building = BUILDINGS[req.building_id]
+    allowed, why = can_call_now(building)
+    if not allowed:
+        await hub.offer(req.building_id, status=why)
+        await ctx.send(sender, CallResult(request_id=req.request_id, building_id=req.building_id, purpose=req.purpose,
+                                          answered=False, summary=f"{building['name']} is {why}, so I didn't call."))
+        return
     await hub.offer(req.building_id, status=f"calling ({req.purpose})")
     await hub.log_event(f"Calling {building['name']} to {req.purpose}")
     result = await place_call(building, req.purpose, req.context)
@@ -164,7 +170,7 @@ async def on_repair(ctx: Context, sender: str, req: RepairRequest):
     for attempt in (1, 2):
         reply = await ask(ctx, caller.address,
                           CallRequest(building_id=req.building_id, purpose="repair",
-                                      context={"issue": req.issue, "unit": "4B", "ticket_id": ticket_id, "attempt": attempt}),
+                                      context={"issue": req.issue, "ticket_id": ticket_id, "attempt": attempt}),
                           CALL_TIMEOUT)
         if isinstance(reply, CallResult) and reply.answered:
             team_post("fix", f"Ticket {ticket_id}: called {BUILDINGS[req.building_id]['name']} about '{req.issue}'. Booked for {reply.repair_slot}.")
@@ -184,12 +190,13 @@ async def on_repair(ctx: Context, sender: str, req: RepairRequest):
 # ---------- Policy ----------
 
 POLICY_PROMPT = (
-    "You are Homie Policy, a renter's-rights explainer for students in Ann Arbor, Michigan. Answer in plain English in "
-    "under 120 words. Cover what Michigan law and Ann Arbor city rules generally say (security deposits are capped at "
-    "1.5 months' rent and must be returned with an itemized list within 30 days of move-out; landlords must give a move-in "
-    "checklist; Ann Arbor regulates when landlords can show units and start re-leasing), what to check in the lease, and "
-    "one next step. Say you're not a lawyer and point to the Michigan Legal Help site or the university's student legal "
-    "services for anything serious."
+    "You are Homie Policy, a renter's-rights explainer for international students renting in the US, Georgia first. "
+    "Answer in plain English in under 120 words: what the law generally says, what to check in the lease, and one next "
+    "step. Georgia basics you can rely on: no statutory cap on security deposits; landlords must return the deposit "
+    "within one month of move-out with an itemized list of deductions; larger landlords must give a move-in inspection "
+    "list before taking a deposit. If the question is about another state, say the rules differ and give the general "
+    "principle. Say you're not a lawyer and point to Georgia Legal Aid (georgialegalaid.org) or the student's university "
+    "legal services for anything serious."
 )
 
 
@@ -207,7 +214,7 @@ async def on_policy(ctx: Context, sender: str, req: PolicyRequest):
 @pictures.on_message(PicturesRequest, replies=PicturesResult)
 async def on_pictures(ctx: Context, sender: str, req: PicturesRequest):
     targets = [(req.url, "that listing")] if req.url else [
-        (f"{PUBLIC_URL}/site/listing/{b}", BUILDINGS[b]["name"]) for b in req.building_ids if b in BUILDINGS]
+        (listing_url(BUILDINGS[b]), BUILDINGS[b]["name"]) for b in req.building_ids if b in BUILDINGS]
     images = []
     for url, label in targets:
         name = await screenshot(url)
