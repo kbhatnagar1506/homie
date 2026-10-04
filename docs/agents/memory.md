@@ -1,2 +1,5 @@
 # Homie Memory
-Remembers everything a renter tells Homie (budget, neighborhoods, move-in date, documents, must-haves, people) in Mapi, a versioned memory store with hybrid semantic + keyword search. Other Homie agents ask it before they act, and you can ask it anything about yourself. Part of the Homie team.
+
+Remembers everything a renter tells the team (budget, neighborhoods, move-in date, documents, must-haves) plus everything the team did for them, stored per user in Mapi with hybrid semantic and keyword search. Every Homie agent checks it before speaking. Ask it anything about yourself, or tell it something to remember.
+
+Part of Homie, a 10-agent Fetch.ai team that's an international student's person in America: Homie, Calls, Negotiator, Papers, Fix, Policy, Pics, Memory, Later and Scout.

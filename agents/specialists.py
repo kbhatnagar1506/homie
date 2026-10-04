@@ -67,15 +67,15 @@ def specialist(role: str, description: str, concurrent: bool = True) -> Agent:
     )
 
 
-caller = specialist("caller", "Phones leasing offices for international students (ElevenLabs + Twilio), always disclosed as an AI. Part of Homie.")
-negotiator = specialist("negotiator", "Negotiates apartment offers using competing deals as leverage. Part of Homie.")
+caller = specialist("caller", "Phones leasing offices for international students, many at once (Gemini Live voice over Twilio), always disclosed as an AI. Part of Homie.")
+negotiator = specialist("negotiator", "Scores apartment offers and negotiates the top two using the best competing deal as leverage. Part of Homie.")
 paperwork = specialist("paperwork", "No-SSN rental paperwork: documents, applications, cashier's-check plans. Part of Homie.", concurrent=False)
-repairs = specialist("repairs", "Files repairs, calls the office, retries and emails until it is booked. Part of Homie.")
+repairs = specialist("repairs", "Repairs: sees the problem on a video call, files the ticket with a photo, and chases the office until it is booked. Part of Homie.")
 policy = specialist("policy", "Plain-English lease and tenant-rights help for Georgia and US renters. Part of Homie.")
 scout = specialist("scout", "Reads a building's whole website: floor plans, live prices, specials, fees, pet and parking policy, how to apply, no-SSN rules. Part of Homie.")
 later = specialist("later", "The waiting agent: holds future tasks (get offers Monday, call when the office opens, rent reminders) and runs them on time. Part of Homie.")
 memory = specialist("memory", "Long-term memory of everything a renter has told Homie, stored in Mapi. Ask it anything about them. Part of Homie.")
-pictures = specialist("pictures", "Opens apartment listings in a real browser and sends screenshots. Part of Homie.")
+pictures = specialist("pictures", "Screenshots any apartment listing in a real browser and reads live prices off building websites. Part of Homie.")
 
 CALL_TIMEOUT = 300
 

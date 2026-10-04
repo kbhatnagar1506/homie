@@ -65,9 +65,9 @@ homie = Agent(
     mailbox=env("AGENTVERSE_MAILBOX", env("HOMIE_MAILBOX", "1")) == "1",
     handle_messages_concurrently=True,
     description=(
-        "Homie is your person in America. It finds and secures US apartments for international students: "
-        "calls every leasing office, negotiates discounts, finds out what they accept instead of an SSN, "
-        "holds the unit, and chases repairs after you move in. Starting in downtown Atlanta."
+        "Homie is your person in America: a 10-agent AI team for international students. It reads building websites, "
+        "calls every leasing office, negotiates, works out what they accept instead of an SSN, schedules follow-ups, "
+        "and chases repairs after you move in. Starting in Atlanta."
     ),
     readme_path=str(ROOT / "docs" / "agentverse_readme.md"),
     avatar_url=f"{PUBLIC_URL}/avatars/homie.png",

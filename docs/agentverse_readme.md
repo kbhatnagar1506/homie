@@ -1,23 +1,26 @@
 # Homie: your person in America
 
-Homie finds and secures a US apartment for international students, from anywhere in the world.
+An AI team for international students renting in the US from abroad. Homie finds, calls and negotiates your apartment, handles the no-SSN paperwork, chases repairs, remembers you, and picks up the work again when the office opens.
 
-**Ask it things like:**
-- "I move to downtown Atlanta on Aug 20. One-bedroom under $1,400. No SSN. Book it if there's a month free."
+**Try:**
+- "Get me a one bedroom at The Mix, jointhemix.com, Aug 20. I have no SSN."
+- "I move to downtown Atlanta Aug 20. 1-bed under $2,500, no SSN. Book it if there's a month free."
 - "My ice maker is broken."
+- "Can my landlord keep my whole deposit for one scratch?"
+- "Call them back Monday when they open."
 
-**What it does:**
-0. Searches real buildings live (Google Places), remembers your preferences (Mapi), and asks how many bedrooms if you didn't say.
-1. Calls every matching leasing office at once (it always says it's an AI assistant calling for a student).
-2. Collects prices, upcoming discounts and the days they apply, fees, and payment rules.
-3. Calls the best two back and negotiates ("another building offers a month free, can you match it?").
-4. Finds out what each office accepts instead of an SSN and prepares the application.
-5. Holds the unit, and explains how to pay when the office only takes a cashier's check.
-6. If offices are closed, reads live prices off every building's website, locks the best one in as the target, and calls back automatically when they open.
-7. After move-in, files repairs with a photo, calls the office, retries, and emails if nobody answers.
+**What happens:**
+1. Homie reads your message (Jev decides route, bedrooms, no-SSN and urgency in one call) and recalls what it knows about you (Mapi).
+2. Scout reads a building's whole website: live prices, fees, office hours, application link, international rules. Or Homie searches real buildings (Google Places).
+3. Calls phones every office at once and always says it's an AI assistant. Negotiator plays the best offer against the top two.
+4. Papers works out exactly what to send instead of an SSN. Policy flags fees and tenant law.
+5. If offices are closed, Pics reads prices off their websites and Later calls back when they open.
+6. You approve before anything is held. After move-in, Fix handles repairs, including over a video call where it can see the problem.
 
-You only pay when you get your keys.
+You only pay when you get your keys (Fetch Payment Protocol).
 
-**Keywords:** apartment, rent, lease, international student, F-1, no SSN, guarantor, cashier's check, leasing office, repairs, maintenance, Atlanta, downtown Atlanta, Georgia Tech, Georgia State.
+**The team (10 uAgents):** Homie (orchestrator), Calls, Negotiator, Papers, Fix, Policy, Pics, Memory, Later, Scout. All of them are also live in the Relay app as a group chat you can text or video-call.
 
-Built for MHacks 2026: 8 Fetch.ai uAgents (Homie, Caller, Negotiator, Paperwork, Repairs, Policy, Pictures, Memory) on Agentverse and ASI:One, Gemini on Vertex AI, Gemini Live voice, Mapi memory, and Relay.
+**Keywords:** apartment, rent, lease, international student, F-1, no SSN, guarantor, cashier's check, leasing office, repairs, maintenance, Atlanta, Georgia Tech, Georgia State.
+
+Built at MHacks 2026 with Fetch.ai uAgents, Agentverse and ASI:One, Gemini and Veo on Vertex AI, Jev (TypeSafe), Mapi, ElevenLabs, Pipecat and Relay.
