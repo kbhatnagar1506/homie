@@ -45,6 +45,8 @@ async def place_call(building: dict, purpose: str, context: dict) -> dict:
     if not MOCK_CALLS and building.get("relay_handle") and env("RELAY_TOKEN_CALLS"):
         return await _relay_call(building, purpose, context)
     if not MOCK_CALLS and env("TWILIO_ACCOUNT_SID") and building.get("phone"):
+        if env("CALL_TEST_NUMBER"):  # rehearse against your own phone before dialing real offices
+            building = {**building, "phone": env("CALL_TEST_NUMBER")}
         return await _twilio_call(building, purpose, context)
     if not MOCK_CALLS and ELEVENLABS_API_KEY and building.get("phone"):
         return await _real_call(building, purpose, context)
