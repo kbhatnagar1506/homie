@@ -31,6 +31,9 @@ BASE_URL = env("RELAY_BASE_URL", "https://api.relayapp.im")
 MENTIONS = {"calls": ("calls", "call"), "papers": ("papers", "paperwork", "documents"), "fix": ("fix", "repair"), "policy": ("policy", "rights", "lawyer"), "pics": ("pics", "pictures", "photos", "screenshot")}
 
 
+ACTIONS = {"search", "repair", "policy", "schedule", "keys", "pictures", "status"}
+
+
 class RelayTeam:
     def __init__(self, send_to_homie: Callable[[str], Awaitable[None]]):
         self.send_to_homie = send_to_homie
@@ -197,24 +200,24 @@ class RelayTeam:
         if text.startswith("[[PAY]]"):
             from homie import payments
 
-            await self.send("homie", chat_id, await self.in_voice("homie", text[7:].strip()))
-            result = await payments.relay_card(self.relays["homie"], chat_id, "Homie fee: keys in hand")
+            await self.send(role, chat_id, await self.in_voice(role, text[7:].strip()))
+            result = await payments.relay_card(self.relays[role], chat_id, "Homie fee: keys in hand")
             if result != "sent":
-                await self.send("homie", chat_id, "Payments aren't switched on in Relay yet, so this one's on the house. 🏡")
+                await self.send(role, chat_id, "Payments aren't switched on in Relay yet, so this one's on the house. 🏡")
             return
         if text.rstrip().endswith("Approve?"):
             self.awaiting_approval = True
-            await self.send("homie", chat_id, await self.in_voice("homie", text), buttons=["Approve", "Keep looking"])
+            await self.send(role, chat_id, await self.in_voice(role, text), buttons=["Approve", "Keep looking"])
             return
         if text.rstrip().endswith("Studio, 1, 2 or 3?"):
             self.awaiting_approval = True  # their next message answers Homie directly
-            await self.send("homie", chat_id, await self.in_voice("homie", text), buttons=["Studio", "1 bedroom", "2 bedrooms", "3 bedrooms"])
+            await self.send(role, chat_id, await self.in_voice(role, text), buttons=["Studio", "1 bedroom", "2 bedrooms", "3 bedrooms"])
             return
         await self.send(role, chat_id, await self.in_voice(role, text))
         if text.startswith("Offers so far"):
             carousel = await self._offers_carousel()
             if carousel:
-                await self.send("homie", chat_id, "Here's who answered:", extra=[carousel])
+                await self.send(role, chat_id, "Here's who answered:", extra=[carousel])
 
     async def _offers_carousel(self) -> dict | None:
         state = await hub.get("/api/state")
@@ -379,9 +382,9 @@ class RelayTeam:
         except Exception:
             pass
 
-        if role == "homie" and self.awaiting_approval:
+        if role in ("homie", "memory") and self.awaiting_approval:
             self.awaiting_approval = False
-            self.route = ("homie", chat_id)
+            self.route = (role, chat_id)
             await self.send_to_homie(text)
             return
 
@@ -390,15 +393,27 @@ class RelayTeam:
             return
         if role == "fix" and not data["chat"].get("is_group"):
             await self.live_card("fix", chat_id)
-        if role == "memory":
-            await self._memory(chat_id, text)
-            return
-
         profile = await memory.update(self.owner, text)
         intent = await parse_intent(text)
         prefs = memory.summary(profile)
 
-        if role in ("homie", "fix", "policy") and intent["intent"] in ("search", "repair", "policy"):
+        if role == "memory":
+            if intent.get("intent") in ACTIONS:
+                # "get me an apartment" in the Memory chat: Memory hands it to Homie with what it knows, and reports back here.
+                self.route = ("memory", chat_id)
+                await self.send("memory", chat_id, "On it 🧠 Handing this to Homie and the team with everything I know about you. I'll keep you posted right here.")
+                await self.send_to_homie(text + (f"\n\nKnown preferences: {prefs}" if prefs else ""))
+                return
+            await self._memory(chat_id, text)
+            return
+
+        if role == "homie":
+            # Everything you text Homie goes to the real Homie agent, which routes it (search, repair, schedule, keys...).
+            self.route = ("homie", chat_id)
+            await self.send_to_homie(text + (f"\n\nKnown preferences: {prefs}" if prefs and intent.get("intent") == "search" else ""))
+            return
+
+        if role in ("fix", "policy") and intent["intent"] in ("search", "repair", "policy"):
             if role == "fix":
                 text = f"Repair needed: {text}"
             elif role == "policy" and intent["intent"] != "policy":

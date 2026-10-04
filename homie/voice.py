@@ -67,13 +67,18 @@ class AvatarCamera(FrameProcessor):
 class Transcript(FrameProcessor):
     """Records what both sides said."""
 
-    def __init__(self, lines: list[str], on_bot_line=None, on_line=None):
+    def __init__(self, lines: list[str], on_bot_line=None, on_line=None, office: bool = True, bot: bool = True):
         super().__init__()
         self.lines, self._bot, self._on_bot_line, self._on_line = lines, "", on_bot_line, on_line
+        self.office, self.bot = office, bot
 
     async def process_frame(self, frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
-        if isinstance(frame, TranscriptionFrame) and frame.text.strip():
+        if not self.bot and isinstance(frame, (TTSTextFrame, LLMTextFrame)):
+            pass
+        elif not self.office and isinstance(frame, TranscriptionFrame):
+            pass
+        elif isinstance(frame, TranscriptionFrame) and frame.text.strip():
             self._flush()
             self.lines.append(f"office: {frame.text.strip()}")
             if self._on_line:

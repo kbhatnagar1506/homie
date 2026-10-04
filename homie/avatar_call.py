@@ -408,7 +408,7 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
         llm = GoogleVertexLLMService(credentials_path=creds, project_id=project, location=VERTEX_LOCATION,
                                      settings=GoogleVertexLLMService.Settings(model=env("CALL_MODEL", "gemini-2.5-flash-lite"),
                                                                               system_instruction=instructions))
-        tts = ElevenLabsTTSService(api_key=env("ELEVENLABS_API_KEY"), voice_id=env("ELEVENLABS_VOICE_ID", "SOYHLrjzK2X1ezoPC6cr"),
+        tts = ElevenLabsTTSService(api_key=env("ELEVENLABS_API_KEY"), voice_id=env("ELEVENLABS_VOICE_ID", "iP95p4xoKVk53GoZ742B"),
                                    model="eleven_flash_v2_5")
         llm.register_function("file_maintenance_request", file_request)
         llm.register_function("look_at_problem", look)

@@ -21,6 +21,7 @@ from homie.config import (
 from homie.llm import extract_call
 
 log = logging.getLogger(__name__)
+_TEST_LINE = asyncio.Lock()
 API = "https://api.elevenlabs.io/v1/convai"
 
 PURPOSE_BRIEFS = {
@@ -46,7 +47,10 @@ async def place_call(building: dict, purpose: str, context: dict) -> dict:
         return await _relay_call(building, purpose, context)
     if not MOCK_CALLS and env("TWILIO_ACCOUNT_SID") and building.get("phone"):
         if env("CALL_TEST_NUMBER"):  # rehearse against your own phone before dialing real offices
-            building = {**building, "phone": env("CALL_TEST_NUMBER")}
+            if _TEST_LINE.locked():
+                return {"answered": False, "summary": f"Test mode: only one call at a time rings the test phone, so {building['name']} wasn't dialed."}
+            async with _TEST_LINE:
+                return await _twilio_call({**building, "phone": env("CALL_TEST_NUMBER")}, purpose, context)
         return await _twilio_call(building, purpose, context)
     if not MOCK_CALLS and ELEVENLABS_API_KEY and building.get("phone"):
         return await _real_call(building, purpose, context)
@@ -72,15 +76,16 @@ async def _twilio_call(building: dict, purpose: str, context: dict) -> dict:
     async with httpx.AsyncClient(timeout=30) as client:
         key = (await client.post(f"{HUB_URL}/api/calls", json={
             "building_id": building["id"], "prompt": CALLER_PROMPT.format(building=building["name"], task=task),
-            "greeting": "The office just picked up. Start the call."})).json()["key"]
+            "greeting": "The office just picked up. Start the call.",
+            "first_message": f"Hi! This is Homie, an AI assistant calling on behalf of an international student. Is this {building['name']}?"})).json()["key"]
         host = PUBLIC_URL.split("://", 1)[1]
         twiml = f'<Response><Connect><Stream url="wss://{host}/twilio/stream/{key}"/></Connect></Response>'
         sid = env("TWILIO_ACCOUNT_SID")
         r = await client.post(f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Calls.json",
                               auth=(sid, env("TWILIO_AUTH_TOKEN")),
-                              data=[("To", building["phone"]), ("From", env("TWILIO_FROM_NUMBER")), ("Twiml", twiml),
-                                    ("StatusCallback", f"{PUBLIC_URL}/twilio/status/{key}"),
-                                    ("StatusCallbackEvent", "completed")])
+                              data={"To": building["phone"], "From": env("TWILIO_FROM_NUMBER"), "Twiml": twiml,
+                                    "StatusCallback": f"{PUBLIC_URL}/twilio/status/{key}",
+                                    "StatusCallbackEvent": "completed"})
         if r.status_code >= 300:
             log.warning("Twilio call to %s failed: %s", building["name"], r.text[:300])
             return {"answered": False, "summary": f"Couldn't dial {building['name']}: {r.json().get('message', r.status_code)}"}

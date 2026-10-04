@@ -302,7 +302,7 @@ async def transcript(body: dict):
 async def register_call(body: dict):
     from homie import phone
 
-    return {"key": phone.register(body["building_id"], body["prompt"], body["greeting"])}
+    return {"key": phone.register(body["building_id"], body["prompt"], body["greeting"], body.get("first_message", ""))}
 
 
 @app.get("/api/calls/{key}/wait")
@@ -371,7 +371,8 @@ async def twilio_voice(request: Request):
     req = ", ".join(f"{k} {v}" for k, v in state["request"].items() if v not in (None, "", []) and not str(k).startswith("_")) or "an apartment in Atlanta"
     building_id = match["building_id"] if match else f"inbound-{caller[-4:] or 'unknown'}"
     key = phone.register(building_id, INBOUND_PROMPT.format(who=who, request=req, offers=offers),
-                         "Someone just called and you picked up. Greet them.")
+                         "Someone just called and you picked up. Greet them.",
+                         "Hi, this is Homie, an AI assistant answering for a student who's abroad right now. Who am I speaking with?")
     log(f"📞 Incoming call from {match['name'] if match else form.get('From', 'unknown')}, Homie Calls is answering")
     await publish()
     asyncio.ensure_future(_after_inbound(key, match["name"] if match else str(form.get("From", "a caller"))))
@@ -401,7 +402,47 @@ async def twilio_stream(websocket: WebSocket, key: str):
     async def on_line(building_id: str, line: str):
         await transcript({"building_id": building_id, "line": line})
 
-    await phone.stream(websocket, key, lambda b, l: asyncio.ensure_future(on_line(b, l)))
+    building_id = phone.CALLS.get(key, {}).get("building_id")
+    if building_id:
+        state["offers"].setdefault(building_id, {"building_id": building_id}).update({"call_key": key, "on_call": True})
+        await publish()
+    try:
+        await phone.stream(websocket, key, lambda b, l: asyncio.ensure_future(on_line(b, l)))
+    finally:
+        if building_id and building_id in state["offers"]:
+            state["offers"][building_id]["on_call"] = False
+            await publish()
+
+
+@app.get("/api/calls/live")
+def live_calls():
+    from homie import phone
+
+    return phone.live()
+
+
+@app.websocket("/api/listen/{key}")
+async def listen_call(websocket: WebSocket, key: str):
+    """Listen in on a live call from the workflow page."""
+    from homie import phone
+
+    await websocket.accept()
+    q = phone.listen(key)
+    try:
+        while True:
+            try:
+                await websocket.send_bytes(await asyncio.wait_for(q.get(), 20))
+            except asyncio.TimeoutError:
+                if key not in phone.CALLS:
+                    break
+    except Exception:
+        pass
+    finally:
+        phone.unlisten(key, q)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @app.post("/api/checklist")
