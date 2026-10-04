@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maple Court Resident Portal</title>
+<style>
+  body { margin:0; background:#f4f1ea; color:#222; font:16px/1.5 Georgia, serif; }
+  .bar { background:#2f4a3a; color:#fff; padding:16px 28px; display:flex; justify-content:space-between; align-items:center; }
+  .bar b { font-size:22px; letter-spacing:.02em; } .bar small { opacity:.75; }
+  .test { background:#fff3cd; color:#7a5b00; padding:6px 28px; font:13px sans-serif; }
+  main { max-width:920px; margin:24px auto; padding:0 16px; display:grid; gap:20px; }
+  .card { background:#fff; border:1px solid #ddd5c5; border-radius:6px; padding:20px 24px; }
+  h2 { margin:0 0 12px; font-size:20px; color:#2f4a3a; }
+  table { width:100%; border-collapse:collapse; font:15px sans-serif; }
+  td, th { text-align:left; padding:8px 6px; border-bottom:1px solid #eee; }
+  .status { font:700 14px sans-serif; padding:3px 10px; border-radius:4px; background:#eee; }
+  .status.HELD { background:#d4edda; color:#155724; } .status.booked { background:#d4edda; color:#155724; } .status.emailed { background:#fff3cd; color:#7a5b00; }
+  form { display:flex; gap:8px; font:15px sans-serif; } input { flex:1; padding:8px; border:1px solid #ccc; border-radius:4px; }
+  button { background:#2f4a3a; color:#fff; border:0; padding:8px 14px; border-radius:4px; cursor:pointer; }
+  .muted { color:#777; font:14px sans-serif; }
+</style>
+</head>
+<body>
+<div class="bar"><b>Maple Court</b><small>410 S Maple Rd · Ann Arbor · Resident &amp; Applicant Portal</small></div>
+<div class="test">Test site built for the Homie demo. Not a real leasing office.</div>
+<main>
+  <div class="card">
+    <h2>Application: Unit 4B</h2>
+    <div id="app" class="muted">No application yet.</div>
+  </div>
+  <div class="card">
+    <h2>Maintenance requests</h2>
+    <table><thead><tr><th>Ticket</th><th>Issue</th><th>Status</th><th>Scheduled</th></tr></thead><tbody id="repairs"><tr><td colspan="4" class="muted">No requests.</td></tr></tbody></table>
+    <p class="muted" style="margin-top:16px">Submit a request yourself (most residents explain it to our chatbot three times first):</p>
+    <form onsubmit="submitRepair(event)"><input id="issue" placeholder="Describe the problem"><button>Submit</button></form>
+  </div>
+</main>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function render(s) {
+  const a = s.application;
+  document.getElementById("app").innerHTML = a ? `<table>
+    <tr><td>Applicant</td><td>International student (no SSN)</td></tr>
+    <tr><td>Documents on file</td><td>${(a.documents || []).map(esc).join(", ")}</td></tr>
+    <tr><td>Submitted by</td><td>Homie, on the applicant's behalf</td></tr>
+    <tr><td>Status</td><td><span class="status ${esc(a.status)}">${esc(a.status)}</span> <span class="muted">updated ${esc(a.updated)}</span></td></tr></table>` : "No application yet.";
+  const rows = (s.repairs || []).map(r => `<tr><td>${esc(r.ticket_id)}</td><td>${esc(r.issue)}</td><td><span class="status ${esc(r.status)}">${esc(r.status)}</span></td><td>${esc(r.slot || "—")}</td></tr>`).join("");
+  document.getElementById("repairs").innerHTML = rows || `<tr><td colspan="4" class="muted">No requests.</td></tr>`;
+}
+async function submitRepair(e) {
+  e.preventDefault();
+  const issue = document.getElementById("issue").value.trim(); if (!issue) return;
+  await fetch("/api/repairs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ building_id: "maple_court", issue }) });
+  document.getElementById("issue").value = "";
+}
+new EventSource("/api/events").onmessage = e => render(JSON.parse(e.data));
+</script>
+</body>
+</html>

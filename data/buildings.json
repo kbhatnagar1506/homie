@@ -1,0 +1,26 @@
+[
+  {
+    "id": "maple_court",
+    "name": "Maple Court",
+    "address": "410 S Maple Rd, Ann Arbor",
+    "mock": {"price": 1380, "discount": "One month free on leases signed on the 15th", "discount_day": 15, "ssn_alternative": "Passport, I-20 and a bank statement showing 3x rent", "fees": 150, "matches_free_month": true, "payment": "Cashier's check or money order only"}
+  },
+  {
+    "id": "arbor_lofts",
+    "name": "Arbor Lofts",
+    "address": "220 E Huron St, Ann Arbor",
+    "mock": {"price": 1350, "discount": "One month free this week", "discount_day": null, "ssn_alternative": "Requires a US guarantor or a guarantor service like TheGuarantors", "fees": 350, "matches_free_month": false, "payment": "Online portal or cashier's check"}
+  },
+  {
+    "id": "kerrytown",
+    "name": "Kerrytown Place",
+    "address": "315 N Fifth Ave, Ann Arbor",
+    "mock": {"price": 1420, "discount": "None right now", "discount_day": null, "ssn_alternative": "Passport and I-20, plus two months' deposit", "fees": 100, "matches_free_month": false, "payment": "Online portal"}
+  },
+  {
+    "id": "state_street",
+    "name": "State Street Commons",
+    "address": "600 S State St, Ann Arbor",
+    "mock": {"price": 1395, "discount": "$500 off first month on weekends", "discount_day": null, "ssn_alternative": "Passport, visa and offer or admission letter", "fees": 200, "matches_free_month": true, "payment": "Cashier's check"}
+  }
+]

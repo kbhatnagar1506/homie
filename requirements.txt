@@ -1,0 +1,7 @@
+uagents==0.26.0
+fastapi
+uvicorn
+httpx
+python-dotenv
+openai
+certifi

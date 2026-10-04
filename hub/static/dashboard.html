@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homie: Live</title>
+<style>
+  :root { --bg:#0b0d10; --panel:#14181d; --line:#232a32; --text:#e8ecf1; --dim:#8a96a3; --green:#3ddc84; --amber:#f5b642; --red:#ff6b6b; --blue:#5aa9ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.4 -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; padding:18px 28px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:24px; letter-spacing:-.02em; } h1 span { color:var(--dim); font-weight:400; font-size:16px; margin-left:10px; white-space:nowrap; }
+  .clocks { display:flex; flex-wrap:wrap; gap:18px; align-items:center; color:var(--dim); }
+  .clocks b { color:var(--text); font-variant-numeric:tabular-nums; }
+  button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 12px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--blue); }
+  main { display:grid; grid-template-columns: 280px 1fr 340px; gap:20px; padding:20px 28px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .panel h2 { margin:0 0 14px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); }
+  .req { color:var(--dim); font-size:14px; margin-bottom:14px; min-height:20px; }
+  .step { display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .step:last-child { border:0; }
+  .dot { width:22px; height:22px; border-radius:50%; border:2px solid var(--line); flex:none; display:grid; place-items:center; font-size:12px; }
+  .step.done .dot { background:var(--green); border-color:var(--green); color:#000; }
+  .step.active .dot { border-color:var(--amber); animation:pulse 1s infinite; }
+  .step.blocked .dot { border-color:var(--red); }
+  .step small { display:block; color:var(--dim); }
+  @keyframes pulse { 50% { box-shadow:0 0 0 6px rgba(245,182,66,.15); } }
+  .board { display:grid; grid-template-columns:repeat(2, 1fr); gap:14px; }
+  .offer { border:1px solid var(--line); border-radius:12px; padding:16px; transition:border-color .3s, transform .3s; }
+  .offer.best { border-color:var(--green); transform:scale(1.02); }
+  .offer .name { font-weight:600; font-size:18px; } .offer .addr { color:var(--dim); font-size:13px; }
+  .price { font-size:34px; font-weight:700; margin:10px 0 2px; font-variant-numeric:tabular-nums; }
+  .price s { color:var(--dim); font-size:18px; font-weight:400; margin-right:8px; }
+  .disc { min-height:22px; color:var(--amber); }
+  .pill { display:inline-block; margin-top:10px; padding:3px 10px; border-radius:99px; font-size:12px; background:#1d242c; color:var(--dim); }
+  .pill.calling { color:var(--amber); } .pill.matched, .pill.answered { color:var(--green); } .pill.noanswer { color:var(--red); }
+  .meta { color:var(--dim); font-size:13px; margin-top:8px; }
+  .result { margin-top:16px; padding:16px; border-radius:12px; background:rgba(61,220,132,.08); border:1px solid rgba(61,220,132,.4); font-size:20px; display:none; }
+  .log { font:13px/1.5 ui-monospace, Menlo, monospace; max-height:68vh; overflow:auto; }
+  .log div { padding:4px 0; border-bottom:1px dashed var(--line); } .log span { color:var(--dim); margin-right:8px; }
+  @media (max-width: 1000px) { main { grid-template-columns:1fr; } .board { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Homie <span>your person in America</span></h1>
+  <div class="clocks">
+    <div>India <b id="india">--:--</b></div>
+    <div>Ann Arbor <b id="aa">--:--</b></div>
+    <div>Day <b id="day">1</b></div>
+    <button onclick="jump()">Jump to next day ⏩</button>
+    <button onclick="jump(15)">Jump to the 15th</button>
+  </div>
+</header>
+<main>
+  <section class="panel">
+    <h2>Steps until your keys</h2>
+    <div class="req" id="req"></div>
+    <div id="steps"></div>
+  </section>
+  <section class="panel">
+    <h2>Offers</h2>
+    <div class="board" id="board"></div>
+    <div class="result" id="result"></div>
+  </section>
+  <section class="panel">
+    <h2>Live</h2>
+    <div class="log" id="log"></div>
+  </section>
+</main>
+<script>
+const STEPS = [["find","Find buildings"],["offers","Get offers"],["negotiate","Negotiate"],["paperwork","No-SSN paperwork"],["held","Hold the unit"],["keys","Keys"]];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function tick() {
+  const fmt = tz => new Date().toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" });
+  $("india").textContent = fmt("Asia/Kolkata"); $("aa").textContent = fmt("America/Detroit");
+}
+setInterval(tick, 1000); tick();
+
+function render(s) {
+  $("day").textContent = s.clock_day;
+  const r = s.request || {};
+  $("req").textContent = r.city ? `${r.beds || 1}-bed · ${r.city}${r.max_rent ? " · under $" + r.max_rent : ""}${r.no_ssn ? " · no SSN" : ""}${r.move_in ? " · " + r.move_in : ""}` : "Waiting for a request in ASI:One…";
+  $("steps").innerHTML = STEPS.map(([id, label], i) => {
+    const st = (s.checklist || {})[id] || {};
+    return `<div class="step ${st.status || ""}"><div class="dot">${st.status === "done" ? "✓" : i + 1}</div><div>${label}<small>${esc(st.detail)}</small></div></div>`;
+  }).join("");
+  const offers = Object.values(s.offers || {});
+  const bestId = s.session && s.session.building_id;
+  $("board").innerHTML = offers.map(o => {
+    const cls = (o.status || "waiting").replace(/[^a-z]/g, "").replace(/^calling.*/, "calling");
+    return `<div class="offer ${o.building_id === bestId ? "best" : ""}">
+      <div class="name">${esc(o.name)}</div><div class="addr">${esc(o.address)}</div>
+      <div class="price">${o.was ? `<s>$${o.was}</s>` : ""}${o.price ? "$" + o.price : "—"}</div>
+      <div class="disc">${esc(o.discount)}</div>
+      ${o.ssn_alternative ? `<div class="meta">No SSN: ${esc(o.ssn_alternative)}</div>` : ""}
+      <span class="pill ${cls}">${esc(o.status || "waiting")}</span></div>`;
+  }).join("");
+  if (bestId) {
+    const b = s.offers[bestId];
+    $("result").style.display = "block";
+    $("result").innerHTML = `Held: Unit 4B at <b>${esc(b.name)}</b>, ${esc(b.discount)}. You saved <b>$${(s.session.saved || 0).toLocaleString()}</b>.`;
+  } else $("result").style.display = "none";
+  $("log").innerHTML = (s.log || []).slice().reverse().map(l => `<div><span>${l.t}</span>${esc(l.text)}</div>`).join("");
+}
+
+async function jump(day) {
+  const s = await (await fetch("/api/state")).json();
+  await fetch("/api/clock", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ day: day || s.clock_day + 1 }) });
+}
+
+const es = new EventSource("/api/events");
+es.onmessage = e => render(JSON.parse(e.data));
+</script>
+</body>
+</html>
