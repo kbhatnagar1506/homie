@@ -17,3 +17,4 @@ requests
 uagents==0.26.0
 uvicorn
 websockets
+python-multipart

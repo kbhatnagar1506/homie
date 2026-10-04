@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from homie.config import ROOT, load_buildings
@@ -323,6 +323,75 @@ async def twilio_status(key: str, request: Request):
         log(f"Call {status}")
         await publish()
     return {"ok": True}
+
+
+def _twilio_signed(request: Request, form: dict) -> bool:
+    """Twilio signs every webhook with the auth token (HMAC-SHA1 of the URL plus sorted form params)."""
+    import base64
+    import hashlib
+    import hmac
+
+    from homie.config import PUBLIC_URL, env
+
+    token = env("TWILIO_AUTH_TOKEN")
+    if not token:
+        return False
+    url = PUBLIC_URL.rstrip("/") + request.url.path + (f"?{request.url.query}" if request.url.query else "")
+    payload = url + "".join(k + str(form[k]) for k in sorted(form))
+    expected = base64.b64encode(hmac.new(token.encode(), payload.encode(), hashlib.sha1).digest()).decode()
+    return hmac.compare_digest(expected, request.headers.get("X-Twilio-Signature", ""))
+
+
+INBOUND_PROMPT = (
+    "You are Homie Calls, an AI assistant answering the phone for an international student who is still abroad "
+    "and can't take US calls. Say right away that you're an AI assistant answering for the student. {who} "
+    "What the student is looking for: {request}. What the team knows so far: {offers}. "
+    "Find out why they're calling, and get the details: prices, specials and the days they apply, fees, what they "
+    "accept instead of an SSN, and any deadline or callback time. Repeat key numbers back to confirm them. "
+    "Never agree to sign, pay or share personal details; say the student will confirm by text. This is a phone call, "
+    "so speak in short natural sentences with no lists. When you're done, thank them, say goodbye, and stop talking."
+)
+
+
+@app.post("/twilio/voice")
+async def twilio_voice(request: Request):
+    """Someone called Homie's number back: Gemini Live answers with the student's context."""
+    from homie import phone
+    from homie.config import PUBLIC_URL
+
+    form = dict(await request.form())
+    if not _twilio_signed(request, form):
+        raise HTTPException(403, "bad signature")
+    caller = "".join(ch for ch in str(form.get("From", "")) if ch.isdigit())[-10:]
+    match = next((o for o in state["offers"].values()
+                  if caller and "".join(ch for ch in str(o.get("phone") or "") if ch.isdigit())[-10:] == caller), None)
+    who = f"The caller is most likely {match['name']}, a building the team contacted." if match else "Ask which building or company is calling."
+    offers = "; ".join(f"{o.get('name')}: {o.get('status', '')} {('$' + str(o['price'])) if o.get('price') else ''}".strip()
+                       for o in list(state["offers"].values())[:6]) or "nothing yet"
+    req = ", ".join(f"{k} {v}" for k, v in state["request"].items() if v not in (None, "", []) and not str(k).startswith("_")) or "an apartment in Atlanta"
+    building_id = match["building_id"] if match else f"inbound-{caller[-4:] or 'unknown'}"
+    key = phone.register(building_id, INBOUND_PROMPT.format(who=who, request=req, offers=offers),
+                         "Someone just called and you picked up. Greet them.")
+    log(f"📞 Incoming call from {match['name'] if match else form.get('From', 'unknown')}, Homie Calls is answering")
+    await publish()
+    asyncio.ensure_future(_after_inbound(key, match["name"] if match else str(form.get("From", "a caller"))))
+    host = PUBLIC_URL.split("://", 1)[1].rstrip("/")
+    twiml = f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://{host}/twilio/stream/{key}"/></Connect></Response>'
+    return Response(content=twiml, media_type="application/xml")
+
+
+async def _after_inbound(key: str, who: str) -> None:
+    from homie import phone
+    from homie.llm import extract_call
+
+    result = await phone.wait(key, 600)
+    if not result.get("transcript"):
+        return
+    fields = await extract_call(result["transcript"])
+    note = f"{who} called back: " + "; ".join(f"{k} {v}" for k, v in fields.items() if v not in (None, "", [], False))[:300]
+    log(f"📞 {note}")
+    remember("", "event", note)
+    await publish()
 
 
 @app.websocket("/twilio/stream/{key}")
