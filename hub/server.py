@@ -22,6 +22,8 @@ STATIC = Path(__file__).parent / "static"
 (ROOT / "data" / "shots").mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Homie hub")
 app.mount("/photos", StaticFiles(directory=STATIC / "photos"), name="photos")
+(STATIC / "figurines").mkdir(exist_ok=True)
+app.mount("/figurines", StaticFiles(directory=STATIC / "figurines"), name="figurines")
 app.mount("/avatars", StaticFiles(directory=ROOT / "relay_app" / "avatars"), name="avatars")
 app.mount("/shots", StaticFiles(directory=ROOT / "data" / "shots"), name="shots")
 subscribers: set[asyncio.Queue] = set()
@@ -72,6 +74,78 @@ def dashboard():
 @app.get("/avatar")
 def avatar():
     return FileResponse(STATIC / "avatar.html")
+
+
+# ---------- live avatar (rendered in the renter's browser, voice by ElevenLabs Agents) ----------
+
+live_queue: list[dict] = []
+
+
+@app.get("/live")
+def live_page():
+    return FileResponse(STATIC / "avatar.html")
+
+
+@app.get("/api/live/signed-url")
+async def live_signed_url(role: str = "fix"):
+    import httpx
+
+    from homie.config import env
+
+    agent = env("ELEVENLABS_LIVE_AGENT_ID")
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get("https://api.elevenlabs.io/v1/convai/conversation/get-signed-url", params={"agent_id": agent},
+                             headers={"xi-api-key": env("ELEVENLABS_API_KEY")})
+    r.raise_for_status()
+    return {"signed_url": r.json()["signed_url"]}
+
+
+@app.post("/api/live/look")
+async def live_look(body: dict):
+    """The browser sends a camera frame; Gemini looks at it like a maintenance tech."""
+    import base64
+
+    from homie.avatar_call import describe_photo
+
+    jpeg = base64.b64decode(body["image"].split(",", 1)[-1])
+    name = f"{uuid.uuid4().hex[:12]}.jpg"
+    (ROOT / "data" / "shots" / name).write_bytes(jpeg)
+    seen = await describe_photo(jpeg, body.get("what_they_said", ""))
+    log(f"Live call: looked at the problem ({seen[:80]})")
+    await publish()
+    return {"what_i_see": seen or "The picture is unclear.", "photo": f"/shots/{name}"}
+
+
+@app.post("/api/live/emotion")
+async def live_emotion(body: dict):
+    from typesafe_sdk import Choice
+
+    from homie import jev
+    from homie.avatar_call import EMOTIONS
+
+    a = await jev.ask({"sentence_the_avatar_is_saying": body.get("text", "")},
+                      {"emotion": Choice(instructions="Which emotion should the avatar show while saying this?", criteria=EMOTIONS)},
+                      label="avatar emotion")
+    return {"emotion": a["emotion"].choice if a and a["emotion"].confidence >= 0.5 else "calm"}
+
+
+@app.post("/api/live/request")
+async def live_request(body: dict):
+    """A maintenance request filed on the live call: ticket now, Repairs agent picks it up from the queue."""
+    ticket_id = f"R-{uuid.uuid4().hex[:6].upper()}"
+    state["repairs"].append({"ticket_id": ticket_id, "status": "filed", "slot": None, "issue": body.get("title"),
+                             "details": body.get("details"), "photo_url": body.get("photo")})
+    live_queue.append({**body, "ticket_id": ticket_id})
+    log(f"Live call: maintenance request {ticket_id} filed: {body.get('title')}")
+    await publish()
+    return {"ticket_id": ticket_id, "status": "filed"}
+
+
+@app.post("/api/live/claim")
+async def live_claim():
+    items = live_queue[:]
+    live_queue.clear()
+    return {"items": items}
 
 
 @app.get("/api/visemes")

@@ -81,6 +81,7 @@ class RelayTeam:
         events.subscribe(self.on_team_post)
         events.subscribe_handoffs(self.on_handoff)
         asyncio.ensure_future(self._prewarm())
+        asyncio.ensure_future(self._live_requests())
         await asyncio.gather(*(self._listen(role) for role in self.relays))
 
     async def _hello(self, role: str) -> None:
@@ -291,6 +292,26 @@ class RelayTeam:
         caption = await self.in_voice("pics", f"Screenshots of {', '.join(label for _, label in targets[:3])}." if images else "That page wouldn't load for me. Try another link?")
         await self.send("pics", chat_id, caption, extra=[{"type": "media", "url": u} for u in images])
 
+    async def _live_requests(self) -> None:
+        """Maintenance requests filed on the live web call go to the Repairs agent like any other."""
+        while True:
+            await asyncio.sleep(2)
+            for item in (await hub.post("/api/live/claim", {})).get("items", []):
+                self.route = ("fix", self.state["direct"].get("fix") or self._chat_for("fix"))
+                photo = item.get("photo")
+                if photo and photo.startswith("/"):
+                    photo = env("PUBLIC_URL") + photo
+                await self.send_to_homie(f"Repair needed: {item.get('title')}. {item.get('details')} "
+                                         f"(urgency: {item.get('urgency', 'normal')}, reported on a live video call)"
+                                         + (f" photo: {photo}" if photo else ""))
+
+    async def live_card(self, role: str, chat_id: str) -> None:
+        url = f"{env('PUBLIC_URL')}/live?role={role}&live=1"
+        await self.send(role, chat_id, await self.in_voice(role, "Tap to video chat with me live, I'll see what you show me."),
+                        extra=[{"type": "rich_card", "title": f"📹 Talk to {TEAM[role].name} live",
+                                "description": "Live 3D video chat. Show me what's broken and I'll file it.",
+                                "suggestions": [{"type": "open_url", "label": "Start live call", "url": url, "application": "webview"}]}])
+
     async def _prewarm(self) -> None:
         from homie.avatar_call import warm
 
@@ -360,6 +381,8 @@ class RelayTeam:
         if role == "pics":
             await self._pics(chat_id, text)
             return
+        if role == "fix" and not data["chat"].get("is_group"):
+            await self.live_card("fix", chat_id)
         if role == "memory":
             await self._memory(chat_id, text)
             return

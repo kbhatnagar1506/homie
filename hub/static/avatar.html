@@ -7,6 +7,30 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
   html, body { margin:0; width:540px; height:960px; overflow:hidden; background:#111; font-family:Inter, sans-serif; }
+  body.live-mode, body.live-mode html { width:100vw; height:100vh; height:100dvh; }
+  #start { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; background:rgba(0,0,0,.25); backdrop-filter:blur(6px); z-index:5; }
+  body.live-mode #start { display:flex; }
+  #start button { font:800 19px Inter; padding:16px 26px; border-radius:99px; border:0; background:#fff; color:#111; box-shadow:0 12px 40px rgba(0,0,0,.3); cursor:pointer; }
+  #start small { color:#fff; font:600 13px Inter; opacity:.85; }
+  #selfview { position:absolute; left:16px; bottom:110px; width:96px; height:128px; border-radius:16px; object-fit:cover; border:2px solid rgba(255,255,255,.8); box-shadow:0 8px 24px rgba(0,0,0,.3); display:none; z-index:3; background:#000; }
+  #hangup { position:absolute; right:18px; bottom:118px; width:58px; height:58px; border-radius:50%; border:0; background:#ff4d4d; color:#fff; font-size:24px; display:none; z-index:3; box-shadow:0 8px 24px rgba(0,0,0,.3); }
+  #fig { position:absolute; inset:0; display:none; overflow:hidden; z-index:0; }
+  #figInner { position:absolute; left:50%; top:50%; width:max(112vw, 112vh); height:max(112vw, 112vh); transform-origin:50% 55%; }
+  body:not(.live-mode) #figInner { width:1060px; height:1060px; }
+  .name, .live, .caption, .ticket, .snap, .state, .flash { z-index:2; }
+  #fig img { position:absolute; inset:0; width:100%; height:100%; opacity:0; transition:opacity 40ms linear; }
+  #fig img.base { opacity:1; transition:none; }
+  body.figure .name, body.figure .live, body.figure .state { text-shadow:0 2px 10px rgba(0,0,0,.35); }
+  body.figure .caption { background:linear-gradient(transparent, rgba(0,0,0,.45)); left:0; right:0; bottom:0; padding:40px 24px 34px; }
+  #fig img.on { opacity:1; }
+  #vid { position:absolute; inset:0; z-index:0; display:none; background:#9fd3b8; }
+  #vid video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity 180ms ease; }
+  #vid video.on { opacity:1; }
+  body.video canvas, body.video #fig { display:none !important; }
+  body.video #vid { display:block; }
+  body.figure canvas { display:none; }
+  body.figure #fig { display:block; }
+  .state { position:absolute; top:62px; left:0; right:0; text-align:center; color:#fff; font:700 12px Inter; opacity:.85; letter-spacing:.06em; text-transform:uppercase; }
   #bg { position:absolute; inset:0; transition:background 1s; }
   canvas { position:absolute; inset:0; }
   .name { position:absolute; top:26px; left:0; right:0; text-align:center; color:rgba(255,255,255,.92); font-weight:800; font-size:26px; letter-spacing:-.02em; text-shadow:0 2px 14px rgba(0,0,0,.25); }
@@ -40,12 +64,20 @@
 <div class="caption" id="caption"></div>
 <div class="snap" id="snap"><img id="snapimg" alt=""><span>📸 looking at it…</span></div>
 <div class="flash" id="flash"></div>
+<div class="state" id="state"></div>
+<div id="fig"></div>
+<div id="vid"><video id="vlisten" muted loop playsinline autoplay preload="auto"></video><video id="vtalk" muted loop playsinline autoplay preload="auto"></video></div>
+<video id="selfview" autoplay playsinline muted></video>
+<button id="hangup" title="End call">✕</button>
+<div id="start"><button id="startbtn">📹 Start live call</button><small>Mic + camera so Homie can hear you and see what's broken</small></div>
 <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
 <script type="module">
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
-const W = 540, H = 960;
+const PARAMS = new URLSearchParams(location.search), LIVE = PARAMS.get("live") === "1";
+const W = LIVE ? innerWidth : 540, H = LIVE ? innerHeight : 960;
+if (LIVE) document.body.classList.add("live-mode");
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.setSize(W, H); renderer.setPixelRatio(1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -152,20 +184,100 @@ window.homie = {
   hideTicket() { document.getElementById("ticket").classList.remove("show"); },
 };
 
+// ---------- figurine mode: Pixar-style character, mouth frames picked from the live mouth shape ----------
+const FIG_FRAMES = ["rest", "aa", "E", "O", "U", "MBP", "FV", "blink"];
+const VIS_TO_FRAME = { sil: "rest", PP: "MBP", FF: "FV", TH: "E", DD: "E", kk: "E", CH: "U", SS: "E", nn: "E", RR: "O", aa: "aa", E: "E", I: "E", O: "O", U: "U" };
+let figMode = false, figShown = "rest";
+const figEls = {};
+// The base frame never changes; mouth frames show only inside a soft mask over the mouth, the blink only over the eyes.
+// Regions come from diffing the frames (scripts/figurine_regions.py), so nothing outside them can flicker.
+let eyesClosed = false;
+const maskFor = ([x0, y0, x1, y1]) => { const cx = (x0 + x1) * 50, cy = (y0 + y1) * 50, rx = (x1 - x0) * 50, ry = (y1 - y0) * 50;
+  return `radial-gradient(ellipse ${rx}% ${ry}% at ${cx}% ${cy}%, #000 62%, transparent 100%)`; };
+async function setupFigure(role) {
+  const regions = await fetch(`/figurines/${role}/regions.json`).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!regions) return;
+  const box = document.getElementById("fig"); box.innerHTML = '<div id="figInner"></div>'; const inner = document.getElementById("figInner");
+  await Promise.all(FIG_FRAMES.map(n => new Promise(res => { const im = new Image(); im.onload = im.onerror = res; im.src = `/figurines/${role}/${n}.jpg`; im.alt = "";
+    if (n === "rest") im.className = "base";
+    else { const m = maskFor(n === "blink" ? regions.eyes : regions.mouth); im.style.maskImage = m; im.style.webkitMaskImage = m; }
+    figEls[n] = im; inner.appendChild(im); })));
+  figMode = true; document.body.classList.add("figure");
+}
+function figShow(name) {
+  if (!figMode || name === figShown) return;
+  if (figShown !== "rest" && figEls[figShown]) figEls[figShown].classList.remove("on");
+  if (name !== "rest" && figEls[name]) figEls[name].classList.add("on");
+  figShown = name;
+}
+function figBlink(closed) { if (figMode && closed !== eyesClosed) { figEls.blink.classList.toggle("on", closed); eyesClosed = closed; } }
+function frameFor([open, wide, round], visName) {
+  if (visName && VIS_TO_FRAME[visName]) return VIS_TO_FRAME[visName];
+  if (open < 0.07) return "rest";
+  if (round > 0.45) return open > 0.38 ? "O" : "U";
+  if (open > 0.55) return "aa";
+  if (wide > 0.62 || open > 0.2) return "E";
+  return "MBP";
+}
+window.homieFigure = setupFigure;
+
+// ---------- video mode: Veo-generated talking + listening loops, swapped by who's speaking ----------
+let videoMode = false, videoTalking = false;
+async function setupVideo(role) {
+  const ok = await fetch(`/figurines/${role}/talking.mp4`, { method: "HEAD" }).then(r => r.ok).catch(() => false);
+  if (!ok) return false;
+  const t = document.getElementById("vtalk"), l = document.getElementById("vlisten");
+  t.src = `/figurines/${role}/talking.mp4`; l.src = `/figurines/${role}/listening.mp4`;
+  l.classList.add("on"); videoMode = true; document.body.classList.add("video");
+  const play = () => { t.play().catch(() => {}); l.play().catch(() => {}); };
+  play(); document.addEventListener("click", play, { once: true });
+  return true;
+}
+function videoShow(talking) {
+  if (!videoMode || talking === videoTalking) return;
+  document.getElementById("vtalk").classList.toggle("on", talking);
+  document.getElementById("vlisten").classList.toggle("on", !talking);
+  videoTalking = talking;
+}
+
 // ---------- animation loop ----------
 let frameStart = 0, blinkAt = performance.now() + 2500;
 const clock = new THREE.Clock();
 function tick(now) {
   const t = clock.getElapsedTime();
-  // viseme playback
-  if (queue.length) {
+  // live call: the mouth follows the voice audio actually playing (energy bands -> open / wide / round)
+  if (window.liveMouth && window.liveMouth.speaking) {
+    const m = window.liveMouth.read();
+    if (m) { target = m; lastSpoke = now; speaking = true; }
+  } else if (queue.length) {
     if (!frameStart) frameStart = now;
     const head0 = queue[0];
     target = VIS[head0.v] || VIS.nn;
     if (now - frameStart >= head0.ms) { queue.shift(); frameStart = now; }
   } else if (speaking && now - lastSpoke > 450) { target = VIS.sil.slice(); }
-  const k = queue.length ? 0.45 : 0.2;
+  const k = (queue.length || (window.liveMouth && window.liveMouth.speaking)) ? 0.5 : 0.2;
   for (let i = 0; i < 3; i++) cur[i] += (target[i] - cur[i]) * k;
+  if (videoMode) {
+    const live = window.liveMouth && window.liveMouth.speaking;
+    videoShow(Boolean(queue.length || live || (speaking && now - lastSpoke < 350)));
+    requestAnimationFrame(tick);
+    return;
+  }
+  if (figMode) {
+    const live = window.liveMouth && window.liveMouth.speaking;
+    const talkingNow = queue.length || live;
+    figShow(talkingNow ? frameFor(cur, live ? null : (queue[0] && queue[0].v)) : "rest");
+    let closed = false;
+    if (now > blinkAt) { const p = (now - blinkAt) / 130; closed = p < 1; if (p >= 1) blinkAt = now + 1800 + Math.random() * 3200; }
+    figBlink(closed);
+    const t2 = clock.getElapsedTime(), box = document.getElementById("figInner");
+    const bob = Math.sin(t2 * 2.0) * 3 + (talkingNow ? Math.abs(Math.sin(t2 * 6.5)) * 4 : 0);
+    const tilt = Math.sin(t2 * 0.8) * 1.2 + (talkingNow ? Math.sin(t2 * 3.1) * 0.8 : 0) + (emotion === "thinking" ? 3 : emotion === "concerned" ? -2 : 0);
+    const scale = 1 + Math.sin(t2 * 1.6) * 0.006 + (emotion === "excited" ? 0.015 : 0);
+    if (box) box.style.transform = `translate(-50%, calc(-46% + ${bob}px)) rotate(${tilt * 0.6}deg) scale(${scale})`;
+    requestAnimationFrame(tick);
+    return;
+  }
   // emotions ease
   const e = EMO[emotion];
   for (const key2 of ["brow", "browTilt", "cheek", "bounce", "smile"]) emo[key2] += (e[key2] - emo[key2]) * 0.06;
@@ -191,7 +303,7 @@ function tick(now) {
   browL.rotation.z = Math.PI / 2 - emo.browTilt; browR.rotation.z = Math.PI / 2 + emo.browTilt;
   cheekMat.opacity = 0.25 + emo.cheek * 0.5;
   // body life: breathing, bob, talking nods, sway
-  const talk = queue.length ? 1 : 0;
+  const talk = (queue.length || (window.liveMouth && window.liveMouth.speaking)) ? 1 : 0;
   rig.position.y = Math.sin(t * 2.1) * 0.04 * emo.bounce + Math.abs(Math.sin(t * 7)) * 0.05 * talk * emo.bounce;
   head.rotation.z = Math.sin(t * 0.9) * 0.035 + talk * Math.sin(t * 3.3) * 0.025;
   head.rotation.y = Math.sin(t * 0.6) * 0.08 + emo.look[0] * 1.5;
@@ -202,9 +314,70 @@ function tick(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
-homie.role(new URLSearchParams(location.search).get("role") || "fix");
+homie.role(PARAMS.get("role") || "fix");
+if (!(await setupVideo(PARAMS.get("role") || "fix"))) await setupFigure(PARAMS.get("role") || "fix");
 requestAnimationFrame(tick);
 window.homieReady = true;
+
+// ---------- live call: ElevenLabs Agents in the browser ----------
+if (LIVE) {
+  const $ = id => document.getElementById(id);
+  let conv = null, stream = null;
+  const setState = t => $("state").textContent = t;
+  async function snapshot() {
+    const v = $("selfview"); if (!v.videoWidth) return null;
+    const c = document.createElement("canvas"); const scale = Math.min(1, 1024 / Math.max(v.videoWidth, v.videoHeight));
+    c.width = v.videoWidth * scale; c.height = v.videoHeight * scale; c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.85);
+  }
+  window.liveMouth = { speaking: false, read() {
+    if (!conv) return null;
+    const f = conv.getOutputByteFrequencyData && conv.getOutputByteFrequencyData(); if (!f || !f.length) return null;
+    const band = (a, b) => { let s = 0; const i0 = Math.floor(a * f.length), i1 = Math.max(i0 + 1, Math.floor(b * f.length)); for (let i = i0; i < i1; i++) s += f[i]; return s / ((i1 - i0) * 255); };
+    const low = band(0.004, 0.03), mid = band(0.03, 0.09), high = band(0.09, 0.25), total = low * 0.5 + mid * 0.35 + high * 0.15;
+    const open = Math.min(1, total * 3.2), round = Math.max(0, Math.min(1, (low - mid) * 3)), wide = Math.max(0, Math.min(1, (high * 2.4 + mid - low)));
+    return [open < 0.06 ? 0.02 : open, 0.4 + wide * 0.45, round * (open > 0.15 ? 1 : 0)];
+  } };
+  $("startbtn").onclick = async () => {
+    $("startbtn").textContent = "Connecting…";
+    ["vtalk", "vlisten"].forEach(id => { const v = document.getElementById(id); if (v && v.src) v.play().catch(() => {}); });
+    try {
+      try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false }); }
+      catch { stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); }
+      $("selfview").srcObject = stream; $("selfview").style.display = "block";
+    } catch { /* no camera: the call still works, look_at_problem will ask to turn it on */ }
+    const { Conversation } = await import("https://esm.sh/@elevenlabs/client@0.8");
+    const { signed_url } = await (await fetch("/api/live/signed-url?role=" + (PARAMS.get("role") || "fix"))).json();
+    conv = await Conversation.startSession({
+      signedUrl: signed_url,
+      clientTools: {
+        look_at_problem: async ({ what_they_said }) => {
+          const img = await snapshot();
+          if (!img) return "The camera is off. Ask them to allow the camera and point it at the problem.";
+          homie.snapshot(img); homie.emotion("thinking");
+          const r = await (await fetch("/api/live/look", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: img, what_they_said }) })).json();
+          window._photo = r.photo; return r.what_i_see;
+        },
+        file_maintenance_request: async ({ title, details, urgency }) => {
+          homie.ticket(title, details, "sending…"); homie.emotion("happy");
+          const r = await (await fetch("/api/live/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, details, urgency, photo: window._photo }) })).json();
+          setTimeout(() => homie.ticketStatus("sent to office", r.ticket_id), 1200);
+          return `Filed as ticket ${r.ticket_id}. Homie Fix is calling the office now.`;
+        },
+      },
+      onConnect: () => { $("start").style.display = "none"; $("hangup").style.display = "block"; setState("connected"); },
+      onDisconnect: () => { setState("call ended"); $("hangup").style.display = "none"; window.liveMouth.speaking = false; homie.stop(); },
+      onModeChange: ({ mode }) => { window.liveMouth.speaking = mode === "speaking"; setState(mode === "speaking" ? "speaking" : "listening"); if (mode !== "speaking") homie.stop(); },
+      onMessage: async ({ message, source }) => {
+        if (source !== "ai" || !message) return;
+        const cap = document.getElementById("caption"); cap.innerHTML = ""; message.split(" ").forEach(w => { const s = document.createElement("span"); s.className = "on"; s.textContent = w + " "; cap.appendChild(s); });
+        try { const e = await (await fetch("/api/live/emotion", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: message }) })).json(); homie.emotion(e.emotion); } catch {}
+      },
+      onError: e => { setState("error: " + (e && e.message || e)); },
+    });
+  };
+  $("hangup").onclick = async () => { if (conv) await conv.endSession(); if (stream) stream.getTracks().forEach(t => t.stop()); };
+}
 
 // demo: /avatar?demo=1 speaks a line so you can see the lip sync without a call
 if (new URLSearchParams(location.search).get("demo")) {

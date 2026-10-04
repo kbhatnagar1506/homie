@@ -57,7 +57,8 @@ class AvatarRenderer:
 
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(args=["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader",
-                                                             "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
+                                                             "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist",
+                                                             "--autoplay-policy=no-user-gesture-required"])
         self.page = await self._browser.new_page(viewport={"width": W, "height": H})
         await self.page.goto(f"{HUB_URL}/avatar?role={self.role}", wait_until="networkidle")
         await self.page.wait_for_function("window.homieReady === true", timeout=20000)
