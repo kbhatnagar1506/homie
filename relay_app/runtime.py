@@ -205,6 +205,12 @@ class RelayTeam:
             if result != "sent":
                 await self.send(role, chat_id, "Payments aren't switched on in Relay yet, so this one's on the house. 🏡")
             return
+        live = re.search(r"https://cloud\.browser-use\.com/share/\S+", text)
+        if live:
+            await self.send(role, chat_id, text.replace(live.group(0), "").strip(),
+                            extra=[{"type": "rich_card", "title": "🖥️ Your application, live", "description": "Papers is filling it out right now. Set your password and hit create when it stops.",
+                                    "suggestions": [{"type": "open_url", "label": "Watch live", "url": live.group(0), "application": "webview"}]}])
+            return
         vibe = re.search(r"https?://\S+/vibe/[a-f0-9]+", text)
         if vibe:
             # The swipe link goes out as a tappable card, never rewritten.

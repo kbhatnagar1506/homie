@@ -532,6 +532,14 @@ async def _play_sim(key: str, building_id: str, lines: list[dict]) -> None:
     await publish()
 
 
+@app.post("/api/apply")
+async def apply_status(body: dict):
+    state["apply"] = {**state.get("apply", {}), **body, "updated": time.strftime("%H:%M:%S")}
+    log(f"🖥️ Application at {body.get('building')}: {body.get('status')}")
+    await publish()
+    return {"ok": True}
+
+
 @app.get("/api/calls/live")
 def live_calls():
     from homie import phone

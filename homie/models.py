@@ -200,3 +200,21 @@ class VibeResult(Model):
     passed: list[str] = []
     taste: str = ""
     done: bool = False
+
+
+class ApplyRequest(Model):
+    """Papers fills out the building's real application, live, and stops before the password / final click."""
+    request_id: str = ""
+    user: str = ""
+    building_id: str = ""
+    url: str = ""
+    move_in: str | None = None
+    beds: int | None = None
+
+
+class ApplyResult(Model):
+    request_id: str = ""
+    user: str = ""
+    share_url: str = ""
+    run_id: str = ""
+    error: str = ""

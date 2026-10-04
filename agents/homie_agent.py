@@ -45,6 +45,8 @@ from homie.models import (
     PaperworkRequest,
     PaperworkResult,
     ScoutRequest,
+    ApplyRequest,
+    ApplyResult,
     VibeDeck,
     VibeRequest,
     VibeResult,
@@ -647,7 +649,25 @@ async def finalize(ctx: Context, sender: str, best: dict, offers: list[dict], re
     await say(ctx, sender,
               f"Held at {name}, ${best['price']}/mo{deal(best)}.{f' You saved ${saved:,}.' if saved > 0 else ''}\n\n"
               f"No SSN needed. They accept: {docs}. Show me those on a video call and I'll send the application.\n\n"
-              f"{plan}\n\nYou only pay Homie when you get your keys. Text me \"I got my keys\" when you do.", end=True)
+              f"{plan}\n\nYou only pay Homie when you get your keys. Text me \"I got my keys\" when you do.")
+    await start_application(ctx, sender, best["building_id"], req)
+    await say(ctx, sender, "That's everything from me for now 🏠", end=True)
+
+
+async def start_application(ctx: Context, sender: str, building_id: str, req: dict) -> None:
+    """Papers opens the building's real application in a live browser and fills it, stopping before the password."""
+    from homie import cache
+
+    b = BUILDINGS.get(building_id, {})
+    facts = (cache.get("scout", building_id) or {}).get("facts") or {}
+    url = facts.get("application_url") or b.get("website") or ""
+    if not url:
+        return
+    res = await ask(ctx, paperwork.address, ApplyRequest(building_id=building_id, url=url, move_in=req.get("move_in"), beds=req.get("beds")), 45)
+    if isinstance(res, ApplyResult) and res.share_url:
+        await hub.step("keys", "active", "Application filling live")
+        await say(ctx, sender, f"🖥️ Papers is filling out your application at {b.get('name')} right now, live. Watch it here:\n{res.share_url}\n"
+                               "It fills in your name, email and move-in, then stops at the password. Set your own password and hit create, that last click is yours.")
 
 
 async def status_line() -> str:
@@ -798,6 +818,7 @@ async def resume_retries(ctx: Context):
 @homie.on_message(ScheduleResult)
 @homie.on_message(ScoutResult)
 @homie.on_message(VibeDeck)
+@homie.on_message(ApplyResult)
 @homie.on_message(VibeResult)
 async def on_specialist_reply(ctx: Context, sender: str, msg):
     resolve(msg)

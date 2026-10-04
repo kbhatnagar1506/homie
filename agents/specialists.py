@@ -43,6 +43,8 @@ from homie.models import (
     PicturesResult,
     RepairRequest,
     RepairResult,
+    ApplyRequest,
+    ApplyResult,
     VibeDeck,
     VibeRequest,
     VibeResult,
@@ -533,3 +535,19 @@ async def on_vibe_wait(ctx: Context, sender: str, req: VibeWait):
                                 tags=["profile", "vibecheck"], source="vibecheck")
     await hub.log_event(f"✨ Vibe check {'done' if deck.get('done') else 'timed out'}: {len(liked)} liked, {len(passed)} passed")
     await ctx.send(sender, VibeResult(request_id=req.request_id, deck_id=req.deck_id, liked=liked, passed=passed, taste=taste, done=bool(deck.get("done"))))
+
+
+# ---------- Papers: the real application, live in a browser ----------
+
+@paperwork.on_message(ApplyRequest, replies=ApplyResult)
+async def on_apply(ctx: Context, sender: str, req: ApplyRequest):
+    CURRENT_USER.set(req.user)
+    from homie import apply
+
+    building = BUILDINGS.get(req.building_id, {"name": req.building_id})
+    if not apply.available() or not req.url:
+        await ctx.send(sender, ApplyResult(request_id=req.request_id, error="no browser agent or application link"))
+        return
+    await hub.log_event(f"🖥️ Papers is opening {building['name']}'s application: {req.url[:80]}")
+    out = await apply.start(building, req.url, req.move_in or "", req.beds)
+    await ctx.send(sender, ApplyResult(request_id=req.request_id, share_url=out.get("share_url", ""), run_id=out.get("run_id", ""), error=out.get("error", "")))
