@@ -606,6 +606,11 @@ async def run_offers(ctx: Context, sender: str, req: dict, offers: list[dict]) -
     name = BUILDINGS[best["building_id"]]["name"]
     ctx.storage.set(f"offer:{sender}", {"best": best, "offers": offers, "req": req})
     ctx.storage.set("offer:last", {"best": best, "offers": offers, "req": req})
+    if env("AUTO_APPROVE", "0") == "1":  # demo: hold the best deal straight away
+        await say(ctx, sender, f"Best deal: {name} at ${best['price']}/mo{deal(best)}. Holding it now 🔑")
+        await hub.log_event(f"Auto-approved: holding {name}")
+        await finalize(ctx, sender, best, offers, req)
+        return
     await say(ctx, sender, f"Best deal: {name} at ${best['price']}/mo{deal(best)}. Approve?")
     approvals[sender] = asyncio.get_running_loop().create_future()
     try:
