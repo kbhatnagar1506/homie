@@ -23,7 +23,10 @@
   header b { color: var(--ink); font-weight: 700; }
   header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
   header .dot.on { background: var(--live); box-shadow: 0 0 10px var(--live); }
-  header a { color: var(--dim); text-decoration: none; margin-left: auto; }
+  header a { color: var(--dim); text-decoration: none; }
+  #allbtn { margin-left: auto; background: transparent; border: 1px solid var(--line); color: var(--ink); font: inherit; font-size: 11px; padding: 6px 10px; cursor: pointer; letter-spacing: .08em; }
+  #allbtn:hover { border-color: var(--live); color: var(--live); }
+  #allbtn.on { border-color: var(--live); color: var(--live); box-shadow: 0 0 14px rgba(61,255,160,.35); }
   header a:hover { color: var(--ink); }
   #request { color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 12px; max-width: 46vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -89,6 +92,7 @@
 <header>
   <span class="dot" id="conn"></span><b>Homie</b><span>flow</span>
   <span id="request"></span>
+  <button id="allbtn">🔊 HEAR ALL CALLS</button>
   <a href="/">mission control</a>
 </header>
 <div id="viewport"><div id="stage"><svg id="wires"></svg></div></div>
@@ -181,13 +185,14 @@ function render() {
     const id = "b:" + o.building_id; seen.add(id);
     const live = !!o.on_call, done = !!o.price, missed = /no answer|didn't|closed|busy|failed/i.test(o.status || "");
     const sub = live ? "● on the phone now" : o.price ? `$${o.price}/mo ${o.discount ? "· " + o.discount : ""}` : (o.status || "queued");
-    node(id, 900, top + i * 76, (live ? "live" : done ? "done" : missed ? "missed" : "") + (selected === id && listening ? " listening" : ""),
+    node(id, 900, top + i * 76, (live ? "live" : done ? "done" : missed ? "missed" : "") + ((o.call_key && socks[o.call_key]) ? " listening" : ""),
       "/avatars/calls.png", o.name || o.building_id, sub, live ? "LIVE" : done ? "QUOTE" : "");
     wire("homie-caller", id, live ? "live" : (active.has("homie-caller>homie") ? "active" : ""));
   });
   for (const id of Object.keys(nodes)) if (id.startsWith("b:") && !seen.has(id)) { nodes[id].remove(); delete nodes[id]; }
 
   svg.innerHTML = wires.join("");
+  if (typeof syncAll === "function") { syncAll(); updateAllLabel(); }
   if (selected) fillPanel(selected);
   fit();
 }
@@ -232,41 +237,79 @@ function fillPanel(id) {
   }
 }
 
-// ---------- live listening ----------
-let ac = null, ws = null, listening = false, analyser = null, next = [0, 0];
+// ---------- live listening (one call, or every call at once) ----------
+let ac = null, analyser = null, listening = false, hearAll = false;
+const socks = {}, nextAt = {}, pans = {};
 document.getElementById("listenbtn").onclick = () => listening ? stopListening() : startListening(document.getElementById("listenbtn").dataset.key);
+document.getElementById("allbtn").onclick = () => hearAll ? stopAll() : startAll();
 
-function startListening(key) {
-  if (!key) return;
+function audio() {
   ac = ac || new (window.AudioContext || window.webkitAudioContext)();
   ac.resume();
   analyser = analyser || (() => { const a = ac.createAnalyser(); a.fftSize = 1024; a.connect(ac.destination); return a; })();
+}
+function liveKeys() { return Object.values(S.offers || {}).filter(o => o.on_call && o.call_key).map(o => o.call_key); }
+
+function openSock(key) {
+  if (socks[key]) return;
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${proto}://${location.host}/api/listen/${key}`);
+  const ws = new WebSocket(`${proto}://${location.host}/api/listen/${key}`);
   ws.binaryType = "arraybuffer";
-  ws.onmessage = e => play(e.data);
-  ws.onclose = () => { if (listening) stopListening("call ended"); };
-  listening = true; next = [0, 0];
+  ws.onmessage = e => play(e.data, key);
+  ws.onclose = () => { delete socks[key]; };
+  socks[key] = ws;
+  if (!pans[key]) {  // spread calls left to right so you can tell them apart
+    const p = ac.createStereoPanner ? ac.createStereoPanner() : ac.createGain();
+    const i = Object.keys(pans).length;
+    if (p.pan) p.pan.value = [0, -0.7, 0.7, -0.35, 0.35, -0.9, 0.9, -0.15, 0.15, 0.5][i % 10];
+    p.connect(analyser); pans[key] = p;
+  }
+}
+function closeSock(key) { if (socks[key]) { try { socks[key].close(); } catch (e) {} delete socks[key]; } }
+function closeAll() { Object.keys(socks).forEach(closeSock); }
+
+function startListening(key) {
+  if (!key) return;
+  stopAll(true); audio(); openSock(key); listening = true;
   document.getElementById("listenbtn").textContent = "■ STOP";
-  document.getElementById("listenstate").textContent = "listening live · office in amber, Homie in blue";
+  document.getElementById("listenstate").textContent = "listening live";
   render(); drawScope();
 }
-
 function stopListening(reason) {
-  listening = false;
-  if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+  listening = false; closeAll();
   document.getElementById("listenbtn").textContent = "▶ LISTEN LIVE";
   if (reason) document.getElementById("listenstate").textContent = reason;
 }
+function startAll() {
+  stopListening(); audio(); hearAll = true; syncAll();
+  document.getElementById("allbtn").classList.add("on");
+  drawScope();
+}
+function stopAll(quiet) {
+  hearAll = false; if (!listening) closeAll();
+  document.getElementById("allbtn").classList.remove("on");
+  updateAllLabel();
+}
+function syncAll() {
+  if (!hearAll) return;
+  const keys = liveKeys();
+  keys.forEach(openSock);
+  Object.keys(socks).forEach(k => { if (!keys.includes(k)) closeSock(k); });
+  updateAllLabel();
+}
+function updateAllLabel() {
+  const n = liveKeys().length, b = document.getElementById("allbtn");
+  b.textContent = hearAll ? `■ HEARING ${Object.keys(socks).length}/${n} CALLS` : `🔊 HEAR ALL CALLS${n ? " (" + n + " live)" : ""}`;
+}
 
-function play(buf) {
+function play(buf, key) {
   const view = new DataView(buf), speaker = view.getUint8(0), rate = view.getUint32(1, true);
-  const n = (buf.byteLength - 5) >> 1; if (!n) return;
-  const audio = ac.createBuffer(1, n, rate), ch = audio.getChannelData(0);
+  const n = (buf.byteLength - 5) >> 1; if (!n || !ac) return;
+  const a = ac.createBuffer(1, n, rate), ch = a.getChannelData(0);
   for (let i = 0; i < n; i++) ch[i] = view.getInt16(5 + i * 2, true) / 32768;
-  const src = ac.createBufferSource(); src.buffer = audio; src.connect(analyser);
-  const s = speaker ? 1 : 0, t = Math.max(ac.currentTime + 0.06, next[s]);
-  src.start(t); next[s] = t + audio.duration;
+  const src = ac.createBufferSource(); src.buffer = a; src.connect(pans[key] || analyser);
+  const slot = key + ":" + speaker, t = Math.max(ac.currentTime + 0.06, nextAt[slot] || 0);
+  src.start(t); nextAt[slot] = t + a.duration;
 }
 
 const scope = document.getElementById("scope"), sctx = scope.getContext("2d");
@@ -274,7 +317,7 @@ function drawScope() {
   const w = scope.width = scope.clientWidth * devicePixelRatio, h = scope.height = scope.clientHeight * devicePixelRatio;
   sctx.clearRect(0, 0, w, h);
   sctx.strokeStyle = "rgba(140,170,200,.15)"; sctx.beginPath(); sctx.moveTo(0, h / 2); sctx.lineTo(w, h / 2); sctx.stroke();
-  if (analyser && listening) {
+  if (analyser && (listening || hearAll)) {
     const d = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(d);
     sctx.strokeStyle = "#3dffa0"; sctx.lineWidth = 1.5 * devicePixelRatio; sctx.shadowColor = "#3dffa0"; sctx.shadowBlur = 8; sctx.beginPath();
     for (let i = 0; i < d.length; i++) { const x = i / d.length * w, y = (d[i] / 255) * h; i ? sctx.lineTo(x, y) : sctx.moveTo(x, y); }
