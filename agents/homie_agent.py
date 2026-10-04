@@ -394,8 +394,8 @@ async def finalize(ctx: Context, sender: str, best: dict, offers: list[dict], re
     await say(ctx, sender,
               f"Held at {name}, ${best['price']}/mo{deal(best)}.{f' You saved ${saved:,}.' if saved > 0 else ''}\n\n"
               f"No SSN needed. They accept: {docs}. Show me those on a video call and I'll send the application.\n\n"
-              f"{plan}\n\nYou only pay Homie when you get your keys.", end=not _payments_on())
-    if _payments_on():
+              f"{plan}\n\nYou only pay Homie when you get your keys.", end=not _payments_on(sender))
+    if _payments_on(sender):
         await request_fee(ctx, sender, best["building_id"])
 
 
@@ -445,8 +445,9 @@ def _savings(best: dict, offers: list[dict]) -> int:
 
 # ---------- Payment Protocol: "you only pay when you get your keys" ----------
 
-def _payments_on() -> bool:
-    return env("ENABLE_PAYMENT_REQUEST", "0") == "1"
+def _payments_on(sender: str = "") -> bool:
+    """The Payment Protocol request goes to ASI:One users; Relay users hear 'you pay when you get your keys'."""
+    return env("ENABLE_PAYMENT_REQUEST", "0") == "1" and name_of(sender) != "homie-relay-bridge"
 
 
 async def request_fee(ctx: Context, sender: str, building_id: str) -> None:
