@@ -81,3 +81,25 @@ async def _watch(job: dict) -> None:
                                           "result": result, "cost": run.get("totalCostUsd")})
             await hub.log_event(f"🖥️ Papers finished the {job['building']} application form: {result[:160]}")
             return
+
+
+LOGIN_TASK = """The renter already has an account at {name}. Go to {url} and open the "Log in" / "Sign in" / "Already have an account?" form.
+Do NOT type any email or password and do NOT click Sign in yourself: the renter signs in themselves, in this same browser.
+Wait (use the wait action about 10 seconds at a time, for up to 8 minutes) until the page shows they are signed in
+(an application, dashboard or welcome page). Then continue their application, working fast:
+- choose a {beds}-bedroom floor plan (the closest available one)
+- move-in date: {move_in}
+- name {first} {last} and email {email}, only where the form asks and they aren't already filled
+Hard rules: never enter SSN, birth date, ID numbers, income, employer, bank or payment details; never upload files;
+never accept terms or consent checkboxes; never click a final Submit / Pay / Sign / e-sign button.
+Stop at the first step that needs any of those, and report the page you stopped on, what you filled, and what's left for the renter."""
+
+
+async def continue_after_login(building: dict, url: str, move_in: str, beds: int | None, first: str, last: str, email: str) -> dict:
+    """Papers waits for the renter to sign in themselves, then carries on with the application."""
+    task = LOGIN_TASK.format(name=building["name"], url=url, first=first, last=last or "-", email=email,
+                             move_in=move_in or "August 20", beds=1 if beds is None else beds)
+    out = await start(building, url, move_in, beds, first, last, email, task=task)
+    if out.get("run_id"):
+        await hub.post("/api/apply", {**out, "status": "waiting for you to sign in"})
+    return out
