@@ -103,3 +103,24 @@ async def continue_after_login(building: dict, url: str, move_in: str, beds: int
     if out.get("run_id"):
         await hub.post("/api/apply", {**out, "status": "waiting for you to sign in"})
     return out
+
+
+SANDBOX_TASK = """Work fast. Go to {url}. This is a sandbox leasing portal for a demo: nothing is real, nothing is charged.
+Complete all three steps in order:
+1. Create account: first name {first}, last name {last}, email {email}, phone {phone}, password and confirm password both {pw},
+   tick the terms checkbox, click "Create Account".
+2. Application: floor plan "1 Bedroom / 1 Bath", move-in date {move_in_iso}, lease term "12 months",
+   applicant type "International student (no SSN)", click "Continue to application fee".
+3. Fee: pay with "Homie sandbox wallet", click "Pay $50.00 and submit application".
+Confirm the "Payment received" screen and report its reference number."""
+
+
+async def sandbox_run(building: dict, move_in_iso: str, first: str, last: str, email: str) -> dict:
+    """Demo mode: Papers creates the account, fills the application and pays the fee on Homie's sandbox portal, live."""
+    import secrets
+    from urllib.parse import quote
+
+    url = f"{env('PUBLIC_URL')}/portal?b={quote(building['name'])}"
+    task = SANDBOX_TASK.format(url=url, first=first, last=last or "-", email=email, phone=env("SANDBOX_PHONE", "4045550123"),
+                               pw="Homie-" + secrets.token_hex(4), move_in_iso=move_in_iso or "2027-08-20")
+    return await start(building, url, "", None, first, last, email, task=task)

@@ -545,9 +545,13 @@ async def on_apply(ctx: Context, sender: str, req: ApplyRequest):
     from homie import apply
 
     building = BUILDINGS.get(req.building_id, {"name": req.building_id})
-    if not apply.available() or not req.url or not req.email:
+    if not apply.available() or not req.email or (not req.url and env("DEMO_MODE", "0") != "1"):
         await ctx.send(sender, ApplyResult(request_id=req.request_id, error="no browser agent or application link"))
         return
-    await hub.log_event(f"🖥️ Papers is opening {building['name']}'s application: {req.url[:80]}")
-    out = await apply.start(building, req.url, req.move_in or "", req.beds, req.first_name, req.last_name, req.email)
+    if env("DEMO_MODE", "0") == "1":
+        await hub.log_event(f"🖥️ Papers is opening {building['name']}'s portal (sandbox): account → application → fee")
+        out = await apply.sandbox_run(building, env("DEMO_MOVE_IN", "2027-08-20"), req.first_name, req.last_name, req.email)
+    else:
+        await hub.log_event(f"🖥️ Papers is opening {building['name']}'s application: {req.url[:80]}")
+        out = await apply.start(building, req.url, req.move_in or "", req.beds, req.first_name, req.last_name, req.email)
     await ctx.send(sender, ApplyResult(request_id=req.request_id, share_url=out.get("share_url", ""), run_id=out.get("run_id", ""), error=out.get("error", "")))

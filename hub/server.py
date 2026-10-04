@@ -132,10 +132,16 @@ def portal():
     return FileResponse(STATIC / "portal.html")
 
 
-@app.post("/api/portal/created")
-async def portal_created(body: dict):
-    state["apply"] = {**state.get("apply", {}), "status": "account created ✅ (sandbox portal)"}
-    log(f"✅ Sandbox portal: account created for {body.get('first')} at {body.get('building')}")
+@app.post("/api/portal/step")
+async def portal_step(body: dict):
+    """The sandbox portal reports each step, so mission control and the console show it live."""
+    step, b = body.get("step"), body.get("building")
+    status = {"account": "✅ account created", "application": "✅ application filled",
+              "payment": f"✅ ${body.get('amount', 50)} fee paid · ref {body.get('ref', '')}"}.get(step, step)
+    state["apply"] = {**state.get("apply", {}), "status": status, **({"done": True} if step == "payment" else {})}
+    log(f"🖥️ {b}: {status} (sandbox portal)")
+    state["agentlog"].append({"t": time.strftime("%H:%M:%S"), "user": "", "from": "homie-paperwork", "to": "homie", "kind": "Portal",
+                              "summary": f"{b}: {status}", "ts": time.time()})
     await publish()
     return {"ok": True}
 

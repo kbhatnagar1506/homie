@@ -704,7 +704,7 @@ async def start_application(ctx: Context, sender: str, building_id: str, req: di
     b = BUILDINGS.get(building_id, {})
     facts = (cache.get("scout", building_id) or {}).get("facts") or {}
     url = facts.get("application_url") or b.get("website") or ""
-    if not url:
+    if not url and env("DEMO_MODE", "0") != "1":
         return
     who = await applicant(ctx, sender)
     if not who:
@@ -714,8 +714,12 @@ async def start_application(ctx: Context, sender: str, building_id: str, req: di
                                                          first_name=who["first"], last_name=who["last"], email=who["email"]), 45)
     if isinstance(res, ApplyResult) and res.share_url:
         await hub.step("keys", "active", "Application filling live")
-        await say(ctx, sender, f"🖥️ Papers is filling out your application at {b.get('name')} right now, live. Watch it here:\n{res.share_url}\n"
-                               "It fills in your name, email and move-in, then stops at the password. Set your own password and hit create, that last click is yours.")
+        if env("DEMO_MODE", "0") == "1":
+            await say(ctx, sender, f"🖥️ Papers is doing the whole thing at {b.get('name')}'s portal right now, live: creating your account, "
+                                   f"filling the application, and paying the $50 fee (sandbox portal, no real money). Watch it here:\n{res.share_url}")
+        else:
+            await say(ctx, sender, f"🖥️ Papers is filling out your application at {b.get('name')} right now, live. Watch it here:\n{res.share_url}\n"
+                                   "It fills in your name, email and move-in, then stops at the password. Set your own password and hit create, that last click is yours.")
 
 
 async def status_line() -> str:
