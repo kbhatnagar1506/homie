@@ -26,6 +26,8 @@ EMOJI_FONT = "/System/Library/Fonts/Apple Color Emoji.ttc"
 def avatar(persona) -> Path:
     ASSETS.mkdir(exist_ok=True)
     path = ASSETS / f"{persona.role}.png"
+    if path.exists():  # keep the themed avatar from scripts.make_avatars
+        return path
     size = 1024
     img = Image.new("RGB", (size, size))
     top, bottom = persona.color, tuple(max(0, c - 70) for c in persona.color)
