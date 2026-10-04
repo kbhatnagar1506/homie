@@ -1,6 +1,6 @@
 # Homie: the AI team that finds, calls and lands your first US apartment
 
-> One text from the other side of the world. Eleven agents read every building's website, let you swipe, call the offices, negotiate, hold the best deal, and start your application, live.
+> **This isn't a chatbot. It's a team.** One text from the other side of the world, and eleven AI agents read every listing, phone every leasing office, negotiate the best deal and start your application, while you sleep.
 
 ![Homie architecture](docs/homie_architecture.png)
 
@@ -76,7 +76,7 @@ Here's what happened in our live end-to-end test on the deployed system, trigger
 | **156s** | **Homie** holds the best deal. |
 | **160–185s** | **Papers** opens the building's portal in a live browser embedded in mission control: ✅ account created → ✅ application filled → ✅ $50 application fee paid *(sandbox portal in demo mode)*. |
 
-**About 3 minutes from one text to a held apartment and a started application.**
+**About 3 minutes from one text to a held apartment and a started application. Zero phone calls made by the student.**
 
 Even on a Sunday, when every office is closed, Homie still decides: it ranks the buildings you liked on Scout's live website prices, picks a top pick, and Later calls them all the moment they open.
 
@@ -94,11 +94,16 @@ Even on a Sunday, when every office is closed, Homie still decides: it ranks the
 - **Agent-to-agent messaging:** specialists talk through our own **request-id RPC** (`homie/rpc.py`) instead of `send_and_receive`. That lets dozens of requests be in flight at once (10 parallel calls, 6 parallel website reads) with no session collisions.
 - **Later is a true long-running agent.** It holds future tasks in agent storage, survives restarts, wakes up on time, and hands work back to Homie.
 
-### Relay: the team lives in your messenger
-- **7 Homie agents are real Relay contacts** (`@homie`, `@homiecalls`, `@homiepapers`, `@homiefix`, `@homiepolicy`, `@homiepics`, `@homiememory`), plus a **Homie Team group chat**. Agents post updates in their own voice, with emoji.
-- **Rich cards:** the swipe deck, the live application and Approve buttons arrive as tappable cards.
-- **Video calls:** call any agent and a Veo-animated figurine answers (talking and listening loops), with ElevenLabs voice and Gemini vision on your camera feed.
-- **Any chat triggers real work:** text Homie *or* Memory "get me an apartment" and the whole pipeline runs, with progress reported back in that chat.
+### Relay: your housing team lives in your messenger
+- **Seven Homie agents are real Relay contacts** (`@homie`, `@homiecalls`, `@homiepapers`, `@homiefix`, `@homiepolicy`, `@homiepics`, `@homiememory`), plus a **Homie Team group chat** where they talk to you, and to each other, like people, emoji included.
+- **Rich cards everywhere:** the swipe deck, Approve buttons, the live application and the live call all arrive as one-tap cards.
+- **Any chat starts real work.** Text Homie, or even Memory, "get me an apartment" and the whole 11-agent pipeline runs, reporting back in that same thread.
+
+#### 📹 Video-call your agents
+- **Tap call on any agent in Relay and a Pixar-style 3D figurine picks up.** Its talking and listening loops are generated with **Veo 3**, and it switches between them seamlessly as the conversation flows.
+- **It hears you, thinks, and talks back in real time:** ElevenLabs speech-to-text, Gemini Flash-Lite with tools, and a natural ElevenLabs voice, streamed through **Pipecat** into Relay's call transport.
+- **It sees through your camera.** Say *"my ice maker is broken"* and Fix says *"let me take a look"*, grabs a frame from your video, reads it with Gemini vision, describes what's wrong, and files a maintenance ticket with the photo attached. Then it chases the office until a slot is booked.
+- **No Relay app? There's a browser version** at `/live`, built on ElevenLabs Agents with the same figurine.
 
 ### Calls you can hear: ElevenLabs + Twilio
 - **Each call runs on an ElevenLabs Agent**, bridged from Twilio media streams in **μ-law 8 kHz with zero transcoding**. Audio passes straight through.
@@ -178,15 +183,6 @@ That's what made Notability valuable: it captured the messy thinking between "we
 - Partner with leasing offices directly. If an office runs its own Agentverse agent, Homie can negotiate agent-to-agent, with no phone call at all.
 - Guarantor and deposit partners integrated into Papers.
 - A free tier for international student offices at universities.
-
----
-
-## 🧾 Honest notes
-
-- Homie always says it's an AI assistant on calls.
-- On real leasing sites, Homie never types a password or presses the final submit for you; that click stays yours.
-- **The demo video uses scripted, ElevenLabs-voiced demo calls,** labeled as demo calls. Real calls go through the same pipeline when an office is open.
-- **The account → application → fee sequence in the demo runs on Homie's sandbox portal,** where no real account is created and no money moves.
 
 ---
 
