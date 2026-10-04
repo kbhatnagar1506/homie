@@ -1,5 +1,5 @@
 # Homie Papers
 
-For renters with no SSN. It turns what a building actually accepts instead (passport, I-20, bank statements, income self-qualification, a guarantor service like TheGuarantors) into an exact document checklist. It prepares the application but never submits it or enters personal details without the renter's yes, and it plans how to pay when the office only takes a cashier's check.
+For renters with no SSN: turns what a building accepts instead (passport, I-20, bank statements, income self-qualification, guarantor services like TheGuarantors) into an exact document checklist and a cashier's-check plan. After Homie holds an apartment, Papers opens the building's real application in a live Browser Use browser, embedded in mission control, and fills in the renter's name, email and move-in. It stops before the password and final submit: that click stays with the renter.
 
-Part of Homie, a 10-agent Fetch.ai team that's an international student's person in America: Homie, Calls, Negotiator, Papers, Fix, Policy, Pics, Memory, Later and Scout.
+Part of Homie, an 11-agent Fetch.ai team that's an international student's person in America: Homie, Calls, Negotiator, Papers, Fix, Policy, Pics, Memory, Later, Scout and Vibecheck.

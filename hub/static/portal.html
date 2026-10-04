@@ -48,8 +48,7 @@
       <div><label for="last">Last name</label><input id="last" required /></div></div>
     <label for="email">Email</label><input id="email" type="email" required />
     <label for="phone">Phone</label><input id="phone" type="tel" required />
-    <div class="row"><div><label for="pw">Password</label><input id="pw" type="password" required minlength="8" /></div>
-      <div><label for="pw2">Confirm password</label><input id="pw2" type="password" required /></div></div>
+    <p class="test" style="margin-top:14px">No password needed: we'll email you a secure sign-in link.</p>
     <label class="check"><input type="checkbox" id="terms" required /> I agree to the Terms &amp; Conditions and Privacy Policy.</label>
     <button type="submit">Create Account</button><div class="err" id="e1"></div>
   </form>
@@ -100,7 +99,6 @@ function go(from, to) {
 }
 document.getElementById("p1").onsubmit = e => {
   e.preventDefault();
-  if (v("pw") !== v("pw2")) { document.getElementById("e1").textContent = "Passwords don't match."; return; }
   tell("account", { first: v("first") }); go(1, 2);
 };
 document.getElementById("p2").onsubmit = e => { e.preventDefault(); tell("application", { plan: v("plan"), movein: v("movein") }); go(2, 3); };
