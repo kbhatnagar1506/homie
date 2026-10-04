@@ -17,10 +17,10 @@ _cache: dict[str, tuple[float, int]] = {}  # key -> (checked at, credits left)
 
 def accounts() -> list[dict]:
     out = []
-    for key, agent in ((env("ELEVENLABS_API_KEY"), env("ELEVENLABS_PHONE_AGENT_ID")),
-                       (env("ELEVENLABS_BACKUP_KEY"), env("ELEVENLABS_BACKUP_PHONE_AGENT_ID"))):
+    for key, agent, live in ((env("ELEVENLABS_API_KEY"), env("ELEVENLABS_PHONE_AGENT_ID"), env("ELEVENLABS_LIVE_AGENT_ID")),
+                             (env("ELEVENLABS_BACKUP_KEY"), env("ELEVENLABS_BACKUP_PHONE_AGENT_ID"), env("ELEVENLABS_BACKUP_LIVE_AGENT_ID"))):
         if key:
-            out.append({"key": key, "phone_agent": agent})
+            out.append({"key": key, "phone_agent": agent, "live_agent": live})
     return out
 
 

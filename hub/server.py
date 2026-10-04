@@ -177,12 +177,21 @@ async def live_signed_url(role: str = "fix"):
 
     from homie.config import env
 
-    agent = env("ELEVENLABS_LIVE_AGENT_ID")
+    from homie import eleven
+
+    # Use whichever ElevenLabs account has the most credit left (each has its own copy of the live agent).
+    accounts = sorted([a for a in eleven.accounts() if a.get("live_agent")],
+                      key=lambda a: 0, reverse=True)
+    ranked = sorted([(await eleven.credits_left(a["key"]), a) for a in accounts], key=lambda x: -x[0])
+    last = None
     async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get("https://api.elevenlabs.io/v1/convai/conversation/get-signed-url", params={"agent_id": agent},
-                             headers={"xi-api-key": env("ELEVENLABS_API_KEY")})
-    r.raise_for_status()
-    return {"signed_url": r.json()["signed_url"]}
+        for _, acct in ranked:
+            r = await client.get("https://api.elevenlabs.io/v1/convai/conversation/get-signed-url", params={"agent_id": acct["live_agent"]},
+                                 headers={"xi-api-key": acct["key"]})
+            if r.status_code == 200:
+                return {"signed_url": r.json()["signed_url"]}
+            last = r
+    raise HTTPException(503, f"voice unavailable: {last.text[:200] if last is not None else 'no ElevenLabs account'}")
 
 
 @app.post("/api/live/look")
