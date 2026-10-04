@@ -3,6 +3,7 @@ cmudict
 fastapi
 google-auth
 httpx
+imageio-ffmpeg
 openai
 pillow
 pipecat-ai[google,silero,elevenlabs]>=1.12,<2

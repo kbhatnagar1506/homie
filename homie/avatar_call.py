@@ -173,6 +173,81 @@ async def describe_photo(jpeg: bytes, context: str) -> str:
     return (r.choices[0].message.content or "").strip()
 
 
+class LoopCamera(FrameProcessor):
+    """The workshop approach: two looping clips as the agent's camera, talking while the bot speaks, listening otherwise.
+    Frames come straight from ffmpeg (no browser); a ticket card can be drawn on top once a request is filed."""
+
+    def __init__(self, talking: str, listening: str, w: int = 720, h: int = 1280, fps: int = 20):
+        super().__init__()
+        self._files, self.w, self.h, self.fps = (talking, listening), w, h, fps
+        self._speaking, self._task, self.overlay = False, None, None
+
+    async def process_frame(self, frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        await self.push_frame(frame, direction)
+        if isinstance(frame, StartFrame):
+            self._task = self.create_task(self._play())
+        elif isinstance(frame, (EndFrame, CancelFrame)) and self._task:
+            await self.cancel_task(self._task)
+        elif isinstance(frame, BotStartedSpeakingFrame):
+            self._speaking = True
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            self._speaking = False
+
+    def set_ticket(self, title: str, details: str, status: str = "sent to office") -> None:
+        """Draw a maintenance-ticket card once; it's composited onto every frame after that."""
+        from PIL import ImageDraw, ImageFont
+
+        card = Image.new("RGBA", (self.w, self.h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(card)
+        x0, y0, x1, y1 = 36, self.h - 420, self.w - 36, self.h - 160
+        d.rounded_rectangle((x0, y0, x1, y1), 28, fill=(255, 255, 255, 240))
+        def font(size, bold=False):
+            for path in (("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"), "/System/Library/Fonts/Supplemental/Arial Bold.ttf" if bold
+                         else "/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Helvetica.ttc"):
+                try:
+                    return ImageFont.truetype(path, size)
+                except OSError:
+                    continue
+            return ImageFont.load_default(size=size)
+
+        big, small = font(36, True), font(26)
+        d.text((x0 + 26, y0 + 22), "MAINTENANCE REQUEST", font=small, fill=(110, 110, 110, 255))
+        d.rounded_rectangle((x1 - 230, y0 + 18, x1 - 22, y0 + 58), 18, fill=(212, 245, 226, 255))
+        d.text((x1 - 212, y0 + 24), status, font=small, fill=(19, 122, 61, 255))
+        d.text((x0 + 26, y0 + 70), title[:28], font=big, fill=(20, 20, 20, 255))
+        y, line = y0 + 126, ""
+        for word in details.split():
+            if d.textlength(line + word, font=small) > (x1 - x0 - 52):
+                d.text((x0 + 26, y), line, font=small, fill=(50, 50, 50, 255)); y += 34; line = ""
+                if y > y1 - 40:
+                    break
+            line += word + " "
+        if y <= y1 - 40:
+            d.text((x0 + 26, y), line, font=small, fill=(50, 50, 50, 255))
+        self.overlay = card
+
+    async def _play(self):
+        import imageio_ffmpeg
+
+        ff = imageio_ffmpeg.get_ffmpeg_exe()
+        players = [await asyncio.create_subprocess_exec(
+            ff, "-v", "error", "-stream_loop", "-1", "-re", "-i", f, "-an",
+            "-vf", f"scale={self.w}:{self.h},fps={self.fps}", "-pix_fmt", "rgb24", "-f", "rawvideo", "-",
+            stdout=asyncio.subprocess.PIPE) for f in self._files]
+        size = self.w * self.h * 3
+        try:
+            while True:
+                talking, listening = [await p.stdout.readexactly(size) for p in players]
+                image = talking if self._speaking else listening
+                if self.overlay is not None:
+                    image = Image.alpha_composite(Image.frombytes("RGB", (self.w, self.h), image).convert("RGBA"), self.overlay).convert("RGB").tobytes()
+                await self.push_frame(OutputImageRawFrame(image=image, size=(self.w, self.h), format="RGB"))
+        finally:
+            for p in players:
+                p.kill()
+
+
 EMOTIONS = {"calm": "Calm, informative", "happy": "Warm and pleased", "excited": "Excited, celebrating good news",
             "concerned": "Sympathetic about a problem or bad news", "thinking": "Considering, asking a question or checking"}
 
@@ -244,23 +319,54 @@ async def warm(role: str) -> AvatarRenderer:
     return r
 
 
+class _NoRenderer:
+    """Stand-in when the call uses video loops: the browser-only effects become no-ops."""
+
+    def __init__(self, loop: "LoopCamera"):
+        self.loop = loop
+
+    async def js(self, *a):
+        pass
+
+    async def emotion(self, *a):
+        pass
+
+    async def ticket(self, title, details, status=""):
+        self.loop.set_ticket(title, details, status or "sent to office")
+
+    async def reset(self):
+        pass
+
+    async def close(self):
+        pass
+
+
 async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> None:
-    """Answer a Relay video call as the live 3D avatar. on_request(title, details, urgency) files the ticket."""
+    """Answer a Relay video call as the figurine (Veo loops, like the Relay workshop) or the 3D avatar as a fallback."""
     from homie import mapi
+    from homie.config import ROOT
 
     camera = CameraTap()
     seen = {"photo": None, "description": ""}
-    renderer, recalled = await asyncio.gather(warm(role), asyncio.wait_for(
-        mapi.recall("renter name apartment building unit preferences", limit=5), 1.5), return_exceptions=True)
-    if isinstance(renderer, Exception):
-        raise renderer
+    clips = ROOT / "hub" / "static" / "figurines" / role
+    loops = None
+    if (clips / "talking.mp4").exists() and (clips / "listening.mp4").exists():
+        loops = LoopCamera(str(clips / "talking.mp4"), str(clips / "listening.mp4"))
+        renderer = _NoRenderer(loops)
+        recalled = await asyncio.wait_for(mapi.recall("renter name apartment building unit preferences", limit=5), 1.5) if True else []
+    else:
+        renderer, recalled = await asyncio.gather(warm(role), asyncio.wait_for(
+            mapi.recall("renter name apartment building unit preferences", limit=5), 1.5), return_exceptions=True)
+        if isinstance(renderer, Exception):
+            raise renderer
     known = "; ".join(m["content"] for m in recalled) if isinstance(recalled, list) else ""
     instructions = FIX_PROMPT.format(memory=f"What you remember about them: {known}" if known else "")
 
+    vw, vh, vfps = (loops.w, loops.h, loops.fps) if loops else (W, H, FPS)
     transport = RelayTransport(api_key=token, call_id=call_id, base_url=env("RELAY_BASE_URL", "https://api.relayapp.im"),
                                params=RelayParams(audio_in_enabled=True, audio_out_enabled=True, video_out_enabled=True,
-                                                  video_out_is_live=True, video_out_width=W, video_out_height=H,
-                                                  video_out_framerate=FPS, video_in_enabled=True))
+                                                  video_out_is_live=True, video_out_width=vw, video_out_height=vh,
+                                                  video_out_framerate=vfps, video_in_enabled=True))
 
     async def look(params):
         """Take a picture from the renter's camera and analyse it."""
@@ -320,8 +426,8 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
                                    model="eleven_flash_v2_5")
         llm.register_function("file_maintenance_request", file_request)
         llm.register_function("look_at_problem", look)
-        stages = [transport.input(), camera, stt, aggregators.user(), llm, tts, AvatarCamera(renderer), transport.output(),
-                  LipSync(renderer, words_are_timed=True), aggregators.assistant()]
+        stages = [transport.input(), camera, stt, aggregators.user(), llm, tts, loops or AvatarCamera(renderer), transport.output(),
+                  *([] if loops else [LipSync(renderer, words_are_timed=True)]), aggregators.assistant()]
         rates = PipelineParams(audio_in_sample_rate=16_000, audio_out_sample_rate=24_000)
     else:
         from pipecat.services.google.gemini_live.vertex.llm import GeminiLiveVertexLLMService
@@ -330,8 +436,8 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
                                          voice_id=env("VOICE_ID", "Puck"), system_instruction=instructions, tools=tools)
         llm.register_function("file_maintenance_request", file_request)
         llm.register_function("look_at_problem", look)
-        stages = [transport.input(), camera, aggregators.user(), llm, AvatarCamera(renderer), transport.output(),
-                  LipSync(renderer, words_are_timed=False), aggregators.assistant()]
+        stages = [transport.input(), camera, aggregators.user(), llm, loops or AvatarCamera(renderer), transport.output(),
+                  *([] if loops else [LipSync(renderer, words_are_timed=False)]), aggregators.assistant()]
         rates = PipelineParams(audio_in_sample_rate=16_000, audio_out_sample_rate=24_000)
 
     worker = PipelineWorker(Pipeline(stages), params=rates, cancel_on_idle_timeout=False)

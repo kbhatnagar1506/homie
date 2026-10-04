@@ -316,6 +316,8 @@ class RelayTeam:
         from homie.avatar_call import warm
 
         for role in ("fix", "homie"):
+            if (ROOT / "hub" / "static" / "figurines" / role / "talking.mp4").exists():
+                continue  # this role uses video loops: nothing to warm
             try:
                 await warm(role)
                 log.info("avatar for %s is warm", role)
