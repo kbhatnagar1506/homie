@@ -48,11 +48,11 @@ Rehearse the whole flow locally without ASI:One:
 
 | Agent | Address |
 |---|---|
-| Homie | _fill in after first run_ |
-| Caller | |
-| Negotiator | |
-| Paperwork | |
-| Repairs | |
+| Homie | `agent1qwcg6lkqt9pmll49h0qe3zy3ajlqy08qemrqe48k5nwknt7h6kyhyvs9rps` |
+| Caller | `agent1qfmq6lcrjag58fxxqq8gpmjkkl948p8998m8lr08sgmtepc6k5k4utdcztj` |
+| Negotiator | `agent1qvyy8jffzqwz5mrldg5gmfk9xqr4qamny6hpmdnkqjjefzmwx3xkwhy6klg` |
+| Paperwork | `agent1qw3ft6ycanku4spz9ng8jj56upzmmqhzlspdrd5wnemnz35phsm7zqsl9m9` |
+| Repairs | `agent1qwa6jlt60t3rqz2lr8rv2cj5e09u9lwtxp0zntc835g8hj3mfugl2zk7sz8` |
 
 ## Demo notes
 
