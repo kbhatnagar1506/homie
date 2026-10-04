@@ -72,8 +72,11 @@ class RelayTeam:
         for role in self.relays:
             if role not in self.state["hello"]:
                 await self._hello(role)
-        await self.ensure_team_chat()
-        await self._ensure_members()
+        for step in (self.ensure_team_chat, self._ensure_members):
+            try:
+                await step()
+            except Exception as e:
+                log.warning("Relay setup step %s failed: %s", step.__name__, e)
         events.subscribe(self.on_team_post)
         events.subscribe_handoffs(self.on_handoff)
         await asyncio.gather(*(self._listen(role) for role in self.relays))
@@ -82,9 +85,12 @@ class RelayTeam:
         p = TEAM[role]
         text = await complete_text(p.voice, [{"role": "user", "content": "Introduce yourself to your owner in one or two short texts' worth of words. Say what you do for them."}],
                                    fallback=f"Hey, it's {p.name}. {p.subtitle}")
-        sent = await self.relays[role].messages.create(
-            to=[self.owner], message={"parts": [{"type": "text", "value": text}]}, idempotency_key=f"hello-{self.handles[role]}")
-        self.state["direct"][role] = sent["chat_id"]
+        try:
+            sent = await self.relays[role].messages.create(
+                to=[self.owner], message={"parts": [{"type": "text", "value": text}]}, idempotency_key=f"hello-{self.handles[role]}-{uuid.uuid4().hex[:8]}")
+            self.state["direct"][role] = sent["chat_id"]
+        except Exception as e:  # a failed hello must never stop the team
+            log.warning("hello from %s failed: %s", role, e)
         self.state["hello"].append(role)
         self._save()
 
