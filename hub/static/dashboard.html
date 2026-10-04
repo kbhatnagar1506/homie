@@ -84,7 +84,31 @@
   .empty b { display:block; color:var(--dim); font-size:15px; margin-bottom:4px; }
 
   /* chatter + history */
-  .feed { display:flex; flex-direction:column; gap:10px; max-height:46vh; overflow:auto; padding-right:4px; }
+  /* agent talk show (after facemash's TalkOverlay): two agents face each other, speaker bounces, bubbles with typing dots */
+  .tk-title { margin:0 0 8px; text-align:center; font-weight:800; font-size:16px; letter-spacing:-.01em; }
+  .tk-progress { height:5px; border-radius:99px; background:rgba(255,255,255,.08); overflow:hidden; margin-bottom:6px; }
+  .tk-progress i { display:block; height:100%; background:linear-gradient(90deg, var(--calls), var(--homie)); transform-origin:left; transition:transform .6s ease; }
+  .tk-stage { display:flex; justify-content:space-between; align-items:flex-end; padding:8px 10px 2px; position:relative; }
+  .tk-who { display:grid; justify-items:center; gap:4px; font-size:12px; font-weight:700; color:var(--dim); }
+  .tk-who img { width:74px; height:74px; border-radius:22px; animation:tk-bob 2.4s ease-in-out infinite; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+  .tk-who.theirs img { animation-delay:-1.2s; }
+  .tk-who.speaking img { animation:tk-talk .5s ease-in-out infinite; box-shadow:0 0 0 3px rgba(255,255,255,.55), 0 10px 30px rgba(0,0,0,.35); }
+  .tk-who.speaking span { color:var(--text); }
+  .tk-spark { position:absolute; left:50%; top:40%; transform:translate(-50%, -50%); font-size:22px; color:var(--warn); opacity:.85; }
+  .feed { display:flex; flex-direction:column; gap:8px; max-height:40vh; overflow:auto; padding:6px 4px 10px 2px; }
+  .tk-b { max-width:84%; padding:8px 12px; border-radius:16px; font-size:13.5px; line-height:1.38; overflow-wrap:anywhere; animation:tk-in .22s ease-out; }
+  .tk-b small { display:block; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; opacity:.6; margin-bottom:2px; }
+  .tk-b.mine { align-self:flex-start; background:rgba(255,138,76,.13); border:1px solid rgba(255,138,76,.35); border-bottom-left-radius:4px; }
+  .tk-b.theirs { align-self:flex-end; background:rgba(76,175,255,.11); border:1px solid rgba(76,175,255,.3); border-bottom-right-radius:4px; }
+  .tk-b.note { align-self:center; max-width:94%; background:none; border:1px dashed var(--line2); color:var(--dim); font-size:12px; border-radius:10px; }
+  .tk-dots { display:inline-flex; gap:4px; padding:3px 2px; }
+  .tk-dots i { width:6px; height:6px; border-radius:50%; background:var(--dim); animation:tk-dot 1s ease-in-out infinite; }
+  .tk-dots i:nth-child(2) { animation-delay:.15s; } .tk-dots i:nth-child(3) { animation-delay:.3s; }
+  @keyframes tk-in { from { opacity:0; transform:translateY(6px); } }
+  @keyframes tk-bob { 50% { transform:translateY(-4px); } }
+  @keyframes tk-talk { 50% { transform:translateY(-6px) scaleY(1.03); } }
+  @keyframes tk-dot { 50% { transform:translateY(-4px); opacity:.5; } }
+  @media (prefers-reduced-motion: reduce) { .tk-who img, .tk-b, .tk-dots i { animation:none !important; } }
   .msg { display:flex; gap:10px; animation:rise .35s ease; }
   @keyframes rise { from { opacity:0; transform:translateY(6px); } }
   .msg img { width:30px; height:30px; border-radius:9px; flex:none; }
@@ -129,6 +153,13 @@
   </section>
   <section class="panel chatter">
     <h2>Agents talking <span class="count" id="msgcount"></span></h2>
+    <p class="tk-title" id="tktitle">The team is waiting for a request</p>
+    <div class="tk-progress"><i id="tkprog" style="transform:scaleX(0)"></i></div>
+    <div class="tk-stage">
+      <div class="tk-who mine" id="tkleft"><img src="/avatars/homie.png" alt=""><span>Homie</span></div>
+      <div class="tk-spark">✦</div>
+      <div class="tk-who theirs" id="tkright"><img src="/avatars/calls.png" alt=""><span>Calls</span></div>
+    </div>
     <div class="feed" id="feed"></div>
     <h2 style="margin-top:18px">Up next ⏰ <span class="count" id="taskcount"></span></h2>
     <div id="tasks" class="tasks"></div>
@@ -192,6 +223,36 @@ function flash(from, to) {
   })(t0);
 }
 
+// --- agent talk show
+const shownLines = new Set();
+function renderTalk(log) {
+  const feed = $("feed"), recent = log.slice(-40);
+  const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+  feed.innerHTML = recent.map(m => {
+    const id = `${m.t}|${m.from}|${m.to}|${m.summary}`;
+    if (m.from === "jev") return `<div class="tk-b note">🧭 Homie decided · ${esc((m.summary || "").replace(/^[^:]+:\s*/, ""))}</div>`;
+    const mine = m.from === "homie" || m.from === "student";
+    const who = mine ? `Homie → ${key(m.to)[1]}` : `${key(m.from)[1]} → Homie`;
+    const fresh = !shownLines.has(id);
+    if (fresh) { shownLines.add(id); setTimeout(() => { const el = document.querySelector(`[data-id="${CSS.escape(id)}"]`); if (el) el.innerHTML = `<small>${esc(who)} · ${esc(m.t)}</small>${esc(m.summary)}`; }, 650); }
+    return `<div class="tk-b ${mine ? "mine" : "theirs"}" data-id="${esc(id)}">${fresh ? '<span class="tk-dots"><i></i><i></i><i></i></span>' : `<small>${esc(who)} · ${esc(m.t)}</small>${esc(m.summary)}`}</div>`;
+  }).join("") || '<p class="tk-b note">Agent conversations show up here live.</p>';
+  if (atBottom || recent.length < 6) feed.scrollTop = feed.scrollHeight;
+  // stage: Homie faces whoever it's working with right now; the speaker bounces
+  const last = [...log].reverse().find(m => m.from !== "jev");
+  if (last) {
+    const partner = last.from === "homie" ? last.to : last.from === "homie" ? last.to : (last.to === "homie" ? last.from : last.from);
+    const k = key(partner);
+    $("tkright").querySelector("img").src = avatar(partner); $("tkright").querySelector("span").textContent = k[1];
+    $("tkleft").classList.toggle("speaking", last.from === "homie");
+    $("tkright").classList.toggle("speaking", last.from !== "homie");
+    $("tktitle").textContent = `Homie is talking with ${k[1]}`;
+    clearTimeout(window._tkIdle); window._tkIdle = setTimeout(() => { $("tkleft").classList.remove("speaking"); $("tkright").classList.remove("speaking"); }, 2500);
+  }
+  const steps = Object.values((current && current.checklist) || {}).filter(x => x.status === "done").length;
+  $("tkprog").style.transform = `scaleX(${Math.min(1, log.length ? 0.08 + steps / 6 : 0)})`;
+}
+
 // --- render
 let seen = 0, current = null;
 function render(s) {
@@ -231,10 +292,7 @@ function render(s) {
   // chatter
   const log = (s.agentlog || []).filter(m => !who || m.user === who);
   $("msgcount").textContent = log.length ? log.length + " messages" : "";
-  $("feed").innerHTML = log.slice().reverse().slice(0, 60).map(m => m.from === "jev"
-    ? `<div class="msg"><img src="/avatars/homie.png" alt=""><div class="bubble" style="background:rgba(255,138,76,.06)"><div class="route">Homie · decided<i>${esc(m.t)}</i></div><p>${esc((m.summary || "").replace(/^[^:]+:\s*/, ""))}</p></div></div>`
-    : `<div class="msg"><img src="${avatar(m.from)}" alt="">
-    <div class="bubble"><div class="route">${esc(key(m.from)[1])} → ${esc(key(m.to)[1])}<i>${esc(m.t)}</i></div><p>${esc(m.summary)}</p></div></div>`).join("") || '<div class="empty" style="padding:20px">Agent messages appear here live.</div>';
+  renderTalk(log) || '<div class="empty" style="padding:20px">Agent messages appear here live.</div>';
   const all = s.agentlog || [];
   for (const m of all.slice(seen)) if (m.from !== "jev") flash(m.from, m.to);
   seen = all.length;
