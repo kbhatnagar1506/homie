@@ -3,6 +3,12 @@
 </p>
 
 <h1 align="center">Homie</h1>
+
+<p align="center">
+
+![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3) ![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
+
+</p>
 <p align="center"><b>An AI team that's your person in America.</b><br/>
 It finds, calls and negotiates your apartment, handles the no-SSN paperwork, chases repairs, remembers you, and picks up the work again on Monday.</p>
 

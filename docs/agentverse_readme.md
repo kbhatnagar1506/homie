@@ -1,3 +1,7 @@
+![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)
+![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
+![domain:housing](https://img.shields.io/badge/housing-FF8A4C)
+
 # Homie: your person in America
 
 An AI team for international students renting in the US from abroad. Homie finds, calls and negotiates your apartment, handles the no-SSN paperwork, chases repairs, remembers you, and picks up the work again when the office opens.

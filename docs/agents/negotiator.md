@@ -1,3 +1,7 @@
+![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)
+![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
+![domain:housing](https://img.shields.io/badge/housing-FF8A4C)
+
 # Homie Negotiator
 
 Takes every offer Calls collected and scores each one: Jev judges the special, no-SSN fit and overall fit, and code weighs in the price. It then uses the strongest competing deal as leverage and hires Calls to phone the best two back ("another building offers a month free, can you match it?"). Returns the winning offer for the renter to approve.
