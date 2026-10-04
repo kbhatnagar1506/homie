@@ -133,7 +133,12 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
         last = ctx.storage.get(f"lastreq:{sender}") or {}
         res = await ask(ctx, later.address, ScheduleRequest(text=text, payload={"sender": sender, "req": last}), 40)
         if isinstance(res, ScheduleResult):
-            await say(ctx, sender, f"Done ⏰ {res.when_human} I'll take care of it: {text}", end=True)
+            import re as _re
+
+            what = _re.sub(r"^(please\s+)?(remind me|can you|could you)\s+", "", text, flags=_re.I)
+            what = _re.sub(r"\b(tomorrow|today|tonight|on \w+day|at \d{1,2}(:\d{2})?\s*(am|pm)?|in \d+ \w+)\b", "", what, flags=_re.I)
+            what = _re.sub(r"\s+", " ", _re.sub(r"^(to|that|about)\s+", "", what.strip(), flags=_re.I)).strip(" ,.")
+            await say(ctx, sender, f"Done ⏰ {res.when_human}: {what or text}", end=True)
         else:
             await say(ctx, sender, "I couldn't schedule that just now. Try again in a minute?", end=True)
     elif intent["intent"] == "memory":
@@ -409,7 +414,11 @@ async def status_line() -> str:
 
 
 async def handle_repair(ctx: Context, sender: str, req: dict) -> None:
-    building_id = ctx.storage.get(f"home:{sender}") or next(iter(BUILDINGS))
+    building_id = ctx.storage.get(f"home:{sender}")
+    if not building_id or building_id not in BUILDINGS:
+        # No search in this session (or a fresh server): repairs still work for "your building".
+        building_id = building_id or "your_building"
+        BUILDINGS.setdefault(building_id, {"id": building_id, "name": "your building", "address": "", "phone": env("HOME_OFFICE_PHONE", ""), "real": False})
     await say(ctx, sender, f"Got it. Filing a repair at {BUILDINGS[building_id]['name']} and calling the office now.")
     import re as _re
 

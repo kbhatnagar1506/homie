@@ -21,8 +21,8 @@ async def screenshot(url: str, full_page: bool = False, width: int = 1280, heigh
         async with async_playwright() as p:
             browser = await p.chromium.launch(args=["--no-sandbox"])
             page = await browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
-            await page.goto(url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_timeout(800)
+            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(2500)  # let images and hero sections paint; ad/tracker-heavy sites never go idle
             await page.screenshot(path=str(SHOTS / name), full_page=full_page)
             await browser.close()
         return name

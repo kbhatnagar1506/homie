@@ -105,7 +105,7 @@ async def live_look(body: dict):
     """The browser sends a camera frame; Gemini looks at it like a maintenance tech."""
     import base64
 
-    from homie.avatar_call import describe_photo
+    from homie.vision import describe_photo
 
     jpeg = base64.b64decode(body["image"].split(",", 1)[-1])
     name = f"{uuid.uuid4().hex[:12]}.jpg"
@@ -121,7 +121,7 @@ async def live_emotion(body: dict):
     from typesafe_sdk import Choice
 
     from homie import jev
-    from homie.avatar_call import EMOTIONS
+    from homie.jev import AVATAR_EMOTIONS as EMOTIONS
 
     a = await jev.ask({"sentence_the_avatar_is_saying": body.get("text", "")},
                       {"emotion": Choice(instructions="Which emotion should the avatar show while saying this?", criteria=EMOTIONS)},

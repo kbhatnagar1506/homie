@@ -197,3 +197,7 @@ TASK_KINDS = {
 async def task_kind(text: str) -> str | None:
     a = await ask({"future_task": text}, {"kind": Choice(instructions="What kind of future task is this?", criteria=TASK_KINDS)}, label="schedule task")
     return pick(a["kind"], 0.5) if a else None
+
+
+AVATAR_EMOTIONS = {"calm": "Calm, informative", "happy": "Warm and pleased", "excited": "Excited, celebrating good news",
+                   "concerned": "Sympathetic about a problem or bad news", "thinking": "Considering, asking a question or checking"}

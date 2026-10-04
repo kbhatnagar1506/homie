@@ -23,6 +23,7 @@ from uuid import uuid4  # noqa: E402
 import httpx  # noqa: E402
 from uagents import Agent, Bureau, Context  # noqa: E402
 from uagents_core.contrib.protocols.chat import ChatAcknowledgement, ChatMessage, EndSessionContent, TextContent  # noqa: E402
+from uagents_core.contrib.protocols.payment import RejectPayment, RequestPayment  # noqa: E402
 
 from agents.homie_agent import homie  # noqa: E402
 from agents.specialists import caller, later, memory, negotiator, paperwork, pictures, policy, repairs  # noqa: E402
@@ -34,6 +35,10 @@ SCENARIOS = [
      lambda r: any(k in r for k in ("Held at", "Locking in", "I'll call every office", "couldn't search"))),
     ("repair", "my ice maker is broken", lambda r: "Ticket" in r or "chasing" in r),
     ("policy", "can my landlord keep my whole security deposit for one scratch?", lambda r: len(r) > 60),
+    ("memory", "what do you know about me?", lambda r: len(r) > 20),
+    ("schedule (Later)", "remind me tomorrow at 9am to email my bank statement to Homie Papers", lambda r: "⏰" in r),
+    ("pictures", "show me pictures of https://generationatl.com", lambda r: "/shots/" in r or "Screenshot" in r),
+    ("keys + Fetch payment", "I just got my keys!!", lambda r: "keys" in r.lower()),
 ]
 REPLIES = {"Studio, 1, 2 or 3?": "1 bedroom", "Approve?": "Approve"}
 results: list[tuple[str, bool, str]] = []
@@ -92,6 +97,12 @@ async def on_reply(ctx: Context, sender: str, msg: ChatMessage):
         record(ctx, ended=True)
         state["i"] += 1
         await next_scenario(ctx)
+
+
+@student.on_message(RequestPayment)
+async def on_payment_request(ctx: Context, sender: str, req: RequestPayment):
+    print(f"STUDENT got payment request: {req.accepted_funds[0].amount} {req.accepted_funds[0].currency} ({req.description}), declining for the test", flush=True)
+    await ctx.send(sender, RejectPayment(reason="e2e test"))
 
 
 @student.on_message(ChatAcknowledgement)
