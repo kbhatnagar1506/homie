@@ -5,6 +5,7 @@ from uagents import Model
 
 class CallRequest(Model):
     request_id: str = ""
+    user: str = ""
     building_id: str
     purpose: str  # "quote" | "negotiate" | "repair"
     context: dict = {}
@@ -12,6 +13,7 @@ class CallRequest(Model):
 
 class CallResult(Model):
     request_id: str = ""
+    user: str = ""
     building_id: str
     purpose: str
     answered: bool
@@ -28,12 +30,14 @@ class CallResult(Model):
 
 class NegotiateRequest(Model):
     request_id: str = ""
+    user: str = ""
     offers: list[dict]
     want_free_month: bool = True
 
 
 class NegotiateResult(Model):
     request_id: str = ""
+    user: str = ""
     offers: list[dict]
     best_building_id: str | None = None
     note: str = ""
@@ -41,6 +45,7 @@ class NegotiateResult(Model):
 
 class PaperworkRequest(Model):
     request_id: str = ""
+    user: str = ""
     building_id: str
     ssn_alternative: str
     payment: str | None = None
@@ -49,6 +54,7 @@ class PaperworkRequest(Model):
 
 class PaperworkResult(Model):
     request_id: str = ""
+    user: str = ""
     documents: list[str]
     payment_plan: str
     application_status: str
@@ -56,6 +62,7 @@ class PaperworkResult(Model):
 
 class RepairRequest(Model):
     request_id: str = ""
+    user: str = ""
     building_id: str
     issue: str
     photo_url: str | None = None
@@ -63,6 +70,7 @@ class RepairRequest(Model):
 
 class RepairResult(Model):
     request_id: str = ""
+    user: str = ""
     ticket_id: str
     slot: str | None
     channel: str  # "call" | "email"
@@ -71,33 +79,42 @@ class RepairResult(Model):
 
 class PolicyRequest(Model):
     request_id: str = ""
+    user: str = ""
     question: str
     building_id: str | None = None
 
 
 class PolicyResult(Model):
     request_id: str = ""
+    user: str = ""
     answer: str
 
 
 class PicturesRequest(Model):
     request_id: str = ""
+    user: str = ""
     building_ids: list[str] = []
     url: str | None = None
+    scan_prices: bool = False
+    beds: int | None = None
 
 
 class PicturesResult(Model):
     request_id: str = ""
+    user: str = ""
     images: list[str] = []
+    prices: list[dict] = []  # [{building_id, price, special, beds}] read live from each building's website
 
 
 class MemoryRequest(Model):
     request_id: str = ""
+    user: str = ""
     question: str = ""
     remember: str = ""
 
 
 class MemoryResult(Model):
     request_id: str = ""
+    user: str = ""
     answer: str = ""
     facts: list[str] = []

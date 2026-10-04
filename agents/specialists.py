@@ -12,10 +12,13 @@ from uagents import Agent, Context
 from homie import hub_client as hub
 from homie import mapi
 from homie.calls import place_call
+from homie import events
 from homie.events import team_post
 from homie.llm import complete_text
-from homie.screenshots import screenshot
+from homie.llm import complete_json
+from homie.screenshots import read_listing, screenshot
 from homie.rpc import ask, resolve
+from homie.scope import CURRENT_USER
 from homie.buildings import BUILDINGS, can_call_now, listing_url
 from homie.config import PUBLIC_URL, ROOT, env, seed
 from homie.models import (
@@ -37,6 +40,14 @@ from homie.models import (
 
 
 MAILBOX = env("AGENTVERSE_MAILBOX", "1") == "1"
+
+
+async def _log_activity(role: str, text: str, images: list[str]) -> None:
+    """Everything the team tells the renter also lands in Mapi, so Homie Memory knows what happened and when."""
+    await mapi.remember(f"Homie {role} update: {text}", tags=["activity", role], source="homie-team")
+
+
+events.subscribe(_log_activity)
 
 
 AVATARS = {"memory": "memory", "caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
@@ -65,6 +76,7 @@ CALL_TIMEOUT = 300
 
 @caller.on_message(CallRequest, replies=CallResult)
 async def on_call(ctx: Context, sender: str, req: CallRequest):
+    CURRENT_USER.set(req.user)
     building = BUILDINGS[req.building_id]
     allowed, why = can_call_now(building)
     if not allowed:
@@ -111,6 +123,7 @@ def _has_free_month(offer: dict) -> bool:
 
 @negotiator.on_message(NegotiateRequest, replies=NegotiateResult)
 async def on_negotiate(ctx: Context, sender: str, req: NegotiateRequest):
+    CURRENT_USER.set(req.user)
     offers = sorted([o for o in req.offers if o.get("price")], key=lambda o: o["price"])
     leverage = next((o for o in offers if _has_free_month(o)), None)
     targets = [o for o in offers if o is not leverage][:2]
@@ -141,6 +154,7 @@ async def on_negotiate(ctx: Context, sender: str, req: NegotiateRequest):
 
 @paperwork.on_message(PaperworkRequest, replies=PaperworkResult)
 async def on_paperwork(ctx: Context, sender: str, req: PaperworkRequest):
+    CURRENT_USER.set(req.user)
     alt = req.ssn_alternative.lower()
     docs = ["Passport"]
     if "i-20" in alt or "i20" in alt:
@@ -169,6 +183,7 @@ async def on_paperwork(ctx: Context, sender: str, req: PaperworkRequest):
 
 @repairs.on_message(RepairRequest, replies=RepairResult)
 async def on_repair(ctx: Context, sender: str, req: RepairRequest):
+    CURRENT_USER.set(req.user)
     ticket = await hub.post("/api/repairs", {"building_id": req.building_id, "issue": req.issue, "photo_url": req.photo_url})
     ticket_id = ticket.get("ticket_id") or f"R-{uuid.uuid4().hex[:6].upper()}"
     for attempt in (1, 2):
@@ -206,8 +221,11 @@ POLICY_PROMPT = (
 
 @policy.on_message(PolicyRequest, replies=PolicyResult)
 async def on_policy(ctx: Context, sender: str, req: PolicyRequest):
+    CURRENT_USER.set(req.user)
     building = BUILDINGS.get(req.building_id or "", {}).get("name")
-    answer = await complete_text(POLICY_PROMPT, [{"role": "user", "content": req.question + (f" (Building: {building})" if building else "")}],
+    known = "; ".join(m["content"] for m in await mapi.recall(req.question, limit=5))
+    answer = await complete_text(POLICY_PROMPT + (f"\nWhat you know about this renter: {known}" if known else ""),
+                                 [{"role": "user", "content": req.question + (f" (Building: {building})" if building else "")}],
                                  fallback="I couldn't reach my legal notes just now. For anything urgent, Michigan Legal Help (michiganlegalhelp.org) is free.")
     await hub.log_event("Policy question answered")
     await ctx.send(sender, PolicyResult(request_id=req.request_id, answer=answer))
@@ -221,6 +239,7 @@ MEMORY_PROMPT = ("You are Homie Memory. Answer the question using only the memor
 
 @memory.on_message(MemoryRequest, replies=MemoryResult)
 async def on_memory(ctx: Context, sender: str, req: MemoryRequest):
+    CURRENT_USER.set(req.user)
     if req.remember:
         await mapi.remember(req.remember, tags=["profile"], source="homie")
     facts = [m["content"] for m in await mapi.recall(req.question, limit=10)] if req.question else []
@@ -233,8 +252,43 @@ async def on_memory(ctx: Context, sender: str, req: MemoryRequest):
 
 # ---------- Pictures ----------
 
+PRICE_PROMPT = """From this apartment website text, find the lowest advertised monthly rent for a {beds} and any current
+special or concession. Return JSON {{"price": int or null, "special": string or null, "available": string or null}}.
+Only use numbers that appear in the text. JSON only."""
+
+
+async def scan_prices(building_ids: list[str], beds: int | None) -> tuple[list[dict], list[str]]:
+    label = "studio" if beds == 0 else f"{beds or 1}-bedroom"
+    browsers = asyncio.Semaphore(int(env("BROWSER_CONCURRENCY", "2")))
+
+    async def one(b: str):
+        building = BUILDINGS[b]
+        if not building.get("website"):
+            return None, None
+        async with browsers:
+            page = await read_listing(building["website"])
+        found = await complete_json(PRICE_PROMPT.format(beds=label), page["text"]) if page["text"] else None
+        shot = f"{PUBLIC_URL}/shots/{page['shot']}" if page.get("shot") else None
+        if found and found.get("price"):
+            await hub.offer(b, status="advertised online", price=_int(found["price"]), discount=found.get("special"))
+            return {"building_id": b, "price": _int(found["price"]), "special": found.get("special"),
+                    "available": found.get("available"), "beds": beds}, shot
+        await hub.offer(b, status="no price online")
+        return None, shot
+
+    results = await asyncio.gather(*(one(b) for b in building_ids if b in BUILDINGS))
+    return [r for r, _ in results if r], [s for _, s in results if s]
+
+
 @pictures.on_message(PicturesRequest, replies=PicturesResult)
 async def on_pictures(ctx: Context, sender: str, req: PicturesRequest):
+    CURRENT_USER.set(req.user)
+    if req.scan_prices:
+        prices, shots = await scan_prices(req.building_ids, req.beds)
+        lines = ", ".join(f"{BUILDINGS[p['building_id']]['name']} ${p['price']}" for p in sorted(prices, key=lambda p: p["price"]))
+        team_post("pics", f"Read every building's website for live prices: {lines or 'no prices posted online'}.", shots[:4])
+        await ctx.send(sender, PicturesResult(request_id=req.request_id, images=shots, prices=prices))
+        return
     targets = [(req.url, "that listing")] if req.url else [
         (listing_url(BUILDINGS[b]), BUILDINGS[b]["name"]) for b in req.building_ids if b in BUILDINGS]
     images = []

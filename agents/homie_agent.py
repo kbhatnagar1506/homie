@@ -27,11 +27,14 @@ from uagents_core.contrib.protocols.payment import (
 
 from agents.specialists import caller, memory, negotiator, paperwork, pictures, policy, repairs
 from homie import hub_client as hub
+from homie import mapi
 from homie.config import PUBLIC_URL, ROOT, env, seed
 from homie.buildings import BUILDINGS, use
-from homie.llm import parse_intent
+from homie.schedule import TZ, human, next_open
+from homie.llm import _beds, parse_intent
 from homie.places import search_apartments
-from homie.rpc import ask, resolve
+from homie.rpc import ask, name_of, resolve
+from homie.scope import CURRENT_USER
 from homie.models import (
     CallRequest,
     CallResult,
@@ -71,6 +74,7 @@ CALL_TIMEOUT = 300
 APPROVAL_TIMEOUT = 120
 approvals: dict[str, asyncio.Future] = {}
 active: set[str] = set()
+clarify: dict[str, dict] = {}
 YES = ("approve", "yes", "yep", "yeah", "do it", "ok", "okay", "sure", "go", "book")
 STEPS = ["find", "offers", "negotiate", "paperwork", "held", "keys"]
 
@@ -89,6 +93,7 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
     if not text:
         return
     ctx.logger.info(f"{sender}: {text}")
+    CURRENT_USER.set(user_label(sender))
     pending = approvals.get(sender)
     if pending and not pending.done():
         pending.set_result(text)
@@ -100,6 +105,16 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
     if saved and text.lower().lstrip().startswith(YES):
         await finalize(ctx, sender, saved["best"], saved["offers"], saved["req"])
         return
+    if sender in clarify:  # they're answering "how many bedrooms?"
+        intent = clarify.pop(sender)
+        more = await parse_intent(text)
+        beds = _beds(text.lower()) if _beds(text.lower()) is not None else more.get("beds")
+        if beds is None and text.strip().isdigit():
+            beds = int(text.strip())
+        intent.update({k: v for k, v in more.items() if v not in (None, "", []) and k not in ("intent", "_text")})
+        intent["beds"] = beds if beds is not None else 1
+        await start_search(ctx, sender, intent)
+        return
     intent = await parse_intent(text)
 
     if intent["intent"] == "repair":
@@ -108,11 +123,12 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
         await handle_policy(ctx, sender, text)
     elif intent["intent"] == "search":
         intent["_text"] = text
-        active.add(sender)
-        try:
-            await handle_search(ctx, sender, intent)
-        finally:
-            active.discard(sender)
+        await fill_from_memory(ctx, intent)
+        if intent.get("beds") is None:
+            clarify[sender] = intent
+            await say(ctx, sender, "Quick one before I start calling: how many bedrooms? Studio, 1, 2 or 3?")
+            return
+        await start_search(ctx, sender, intent)
     else:
         await say(ctx, sender,
                   "I'm Homie, your person in America. Tell me where and when you're moving, your budget, "
@@ -120,20 +136,39 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
                   "Already moved in? Tell me what's broken and I'll get it fixed.", end=True)
 
 
-async def handle_search(ctx: Context, sender: str, req: dict) -> None:
-    # Ask Homie Memory (Mapi) what we already know, and fill any gaps in this request from it.
+def user_label(sender: str) -> str:
+    if name_of(sender) == "homie-relay-bridge":
+        return f"@{env('RELAY_OWNER', 'owner')} · Relay"
+    return f"ASI:One · {sender[:12]}…{sender[-4:]}"
+
+
+async def fill_from_memory(ctx: Context, req: dict) -> None:
+    """Ask Homie Memory (Mapi) what we already know about this person and fill gaps in the request."""
     mem = await ask(ctx, memory.address, MemoryRequest(
         question="Apartment preferences: city or neighborhood, budget, move-in date, bedrooms, SSN status, must-haves, deal-breakers",
         remember=req.get("_text", "")), 30)
     if isinstance(mem, MemoryResult) and mem.facts:
         known = await parse_intent(" ".join(mem.facts))
         for key in ("area", "city", "max_rent", "move_in", "beds", "no_ssn"):
-            if not req.get(key) and known.get(key):
+            if req.get(key) in (None, "") and known.get(key) not in (None, ""):
                 req[key] = known[key]
-        await hub.log_event("Memory: " + (mem.answer or "; ".join(mem.facts[:3]))[:200])
+        req["_memory"] = mem.answer or "; ".join(mem.facts[:4])
+        await hub.log_event("Memory: " + req["_memory"][:200])
+
+
+async def start_search(ctx: Context, sender: str, req: dict) -> None:
+    active.add(sender)
+    try:
+        await handle_search(ctx, sender, req)
+    finally:
+        active.discard(sender)
+
+
+async def handle_search(ctx: Context, sender: str, req: dict) -> None:
     area = req.get("area") or req.get("city") or env("DEFAULT_AREA", "downtown Atlanta, GA")
     budget = req.get("max_rent")
-    beds = req.get("beds") or 1
+    beds = req.get("beds") if req.get("beds") is not None else 1
+    label = "studio" if beds == 0 else f"{beds}-bedroom"
     await hub.post("/api/reset", {"request": {**req, "city": area}, "buildings": []})
     for s in STEPS:
         await hub.step(s, "todo")
@@ -154,7 +189,7 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
     await say(ctx, sender,
               f"On it. Found {len(BUILDINGS)} buildings in {area}"
               f"{f' ({open_now} open right now)' if any(b.get('real') for b in BUILDINGS.values()) else ''}. "
-              f"Calling them now{f', looking for a {beds}-bedroom under ${budget}' if budget else ''}"
+              f"Calling them now about a {label}{f' under ${budget}' if budget else ''}"
               f"{', no SSN' if req.get('no_ssn') else ''}. You can go to sleep.")
 
     # 1. Call every building at once (Caller agent).
@@ -170,13 +205,98 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
             offers.append(reply.dict())
     if budget:
         offers = [o for o in offers if o["price"] <= budget] or offers
+    unanswered = [b for b, r in zip(BUILDINGS, replies) if not (isinstance(r, CallResult) and r.answered)]
     if not offers:
-        await hub.step("offers", "blocked", "No building answered")
-        await say(ctx, sender, "Nobody picked up yet. I'll keep calling and email them, and message you when I hear back.", end=True)
+        await recover_without_calls(ctx, sender, req, unanswered, label)
         return
+    if unanswered:
+        await schedule_retry(ctx, sender, req, unanswered, target=min(o["price"] for o in offers))
+    await run_offers(ctx, sender, req, offers)
+
+
+def deal(o: dict) -> str:
+    d = (o.get("discount") or "").strip()
+    return f", {d}" if d and not d.lower().startswith(("none", "no ")) else ""
+
+
+def special(p: dict) -> str:
+    return f" ({p['special']})" if p.get("special") else ""
+
+
+def beat(job: dict) -> str:
+    return f", with ${job['target']}/mo as the price to beat" if job.get("target") else ""
+
+
+async def recover_without_calls(ctx: Context, sender: str, req: dict, building_ids: list[str], label: str) -> None:
+    """Offices didn't pick up: read live prices off their websites, lock in the best one as our target, call back when they open."""
+    await hub.step("offers", "active", "Offices closed: reading live prices from their websites")
+    await say(ctx, sender, "None of the offices picked up (most are closed today). Reading their websites for live prices right now.")
+    res = await ask(ctx, pictures.address, PicturesRequest(building_ids=building_ids, scan_prices=True, beds=req.get("beds")), 240)
+    prices = sorted(res.prices, key=lambda p: p["price"]) if isinstance(res, PicturesResult) else []
+    budget = req.get("max_rent")
+    fits = [p for p in prices if not budget or p["price"] <= budget] or prices
+    when = await schedule_retry(ctx, sender, req, building_ids, target=fits[0]["price"] if fits else None)
+    if not fits:
+        await hub.step("offers", "blocked", f"No prices online; calling {human(when)}")
+        await say(ctx, sender, f"None of them post {label} prices online. I'll call every office {human(when)} when they open and get real quotes.", end=True)
+        return
+    best = fits[0]
+    name = BUILDINGS[best["building_id"]]["name"]
+    ctx.storage.set(f"target:{sender}", best)
+    await mapi.remember(f"Best live price found online for their {label}: {name} at ${best['price']}/mo{special(best)}. Calling offices {human(when)} to lock it in.",
+                        tags=["activity", "homie"], source="homie")
+    lines = "\n".join(f"- {BUILDINGS[p['building_id']]['name']}: ${p['price']}{special(p)}" for p in fits[:4])
+    await hub.step("offers", "done", f"Best online: {name} ${best['price']}")
+    await hub.step("negotiate", "todo", f"Calling {human(when)} to lock it in")
+    await say(ctx, sender,
+              f"Live prices for a {label} right now:\n{lines}\n\n"
+              f"Locking in {name} at ${best['price']}/mo as our target. I'll call every office {human(when)} when they open, "
+              f"ask {name} to hold that price, and use it to push the others for a better deal. I'll message you as soon as I have offers.",
+              end=True)
+
+
+async def schedule_retry(ctx: Context, sender: str, req: dict, building_ids: list[str], target: int | None) -> datetime:
+    buildings = [BUILDINGS[b] for b in building_ids if b in BUILDINGS]
+    when = min((next_open(b.get("hours") or []) for b in buildings), default=next_open([]))
+    job = {"sender": sender, "req": {k: v for k, v in req.items() if not k.startswith("_")}, "buildings": buildings,
+           "when": when.isoformat(), "target": target}
+    jobs = [j for j in (ctx.storage.get("retries") or []) if j["sender"] != sender] + [job]
+    ctx.storage.set("retries", jobs)
+    asyncio.ensure_future(_run_retry(ctx, job))
+    await hub.log_event(f"Callbacks scheduled {human(when)} for {len(buildings)} offices")
+    return when
+
+
+async def _run_retry(ctx: Context, job: dict) -> None:
+    CURRENT_USER.set(user_label(job["sender"]))
+    delay = (datetime.fromisoformat(job["when"]) - datetime.now(TZ)).total_seconds()
+    await asyncio.sleep(max(0, delay))
+    jobs = [j for j in (ctx.storage.get("retries") or []) if j != job]
+    ctx.storage.set("retries", jobs)
+    sender, req = job["sender"], job["req"]
+    use([{**b, "open_now": True} for b in job["buildings"]])
+    await hub.post("/api/buildings", {"buildings": list(BUILDINGS.values())})
+    await say(ctx, sender, f"Offices are open. Calling {len(BUILDINGS)} buildings now"
+                           f"{beat(job)}.")
+    replies = await asyncio.gather(*(
+        ask(ctx, caller.address, CallRequest(building_id=b, purpose="quote", context={"move_in": req.get("move_in") or "August 20"}), CALL_TIMEOUT)
+        for b in BUILDINGS))
+    offers = [r.dict() for r in replies if isinstance(r, CallResult) and r.answered and r.price]
+    if not offers:
+        await say(ctx, sender, "Still no one picking up. I'll try again at the next opening.", end=True)
+        await schedule_retry(ctx, sender, req, list(BUILDINGS), job.get("target"))
+        return
+    active.add(sender)
+    try:
+        await run_offers(ctx, sender, req, offers)
+    finally:
+        active.discard(sender)
+
+
+async def run_offers(ctx: Context, sender: str, req: dict, offers: list[dict]) -> None:
     await hub.step("offers", "done", f"{len(offers)} offers")
-    lines = "\n".join(f"- {BUILDINGS[o['building_id']]['name']}: ${o['price']}, {o.get('discount') or 'no discount'}" for o in offers)
-    simulated = "\n(Rehearsal: phone line not connected yet, so these numbers are simulated.)" if env("MOCK_CALLS", "1") == "1" else ""
+    lines = "\n".join(f"- {BUILDINGS[o['building_id']]['name']}: ${o['price']}{deal(o)}" for o in offers)
+    simulated = "\n(Rehearsal mode: these numbers are simulated, no real calls were placed.)" if env("MOCK_CALLS", "1") == "1" else ""
     await say(ctx, sender, f"Offers so far:\n{lines}{simulated}\n\nCalling the best two back to negotiate.")
     top = [o["building_id"] for o in sorted(offers, key=lambda o: o["price"])[:3]]
     asyncio.ensure_future(ask(ctx, pictures.address, PicturesRequest(building_ids=top), 120))  # Pics screenshots them meanwhile
@@ -190,7 +310,7 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
     name = BUILDINGS[best["building_id"]]["name"]
     ctx.storage.set(f"offer:{sender}", {"best": best, "offers": offers, "req": req})
     ctx.storage.set("offer:last", {"best": best, "offers": offers, "req": req})
-    await say(ctx, sender, f"{name} came down to ${best['price']}/mo with {best.get('discount')}. Approve?")
+    await say(ctx, sender, f"Best deal: {name} at ${best['price']}/mo{deal(best)}. Approve?")
     approvals[sender] = asyncio.get_running_loop().create_future()
     try:
         answer = await asyncio.wait_for(approvals[sender], APPROVAL_TIMEOUT)
@@ -227,10 +347,11 @@ async def finalize(ctx: Context, sender: str, best: dict, offers: list[dict], re
 
     saved = _savings(best, offers)
     await hub.step("held", "done", f"Held at {name}")
+    await mapi.remember(f"Homie held an apartment for them at {name}, ${best['price']}/mo{deal(best)}.", tags=["activity", "homie", "home"], source="homie")
     await hub.post("/api/session", {"sender": sender, "building_id": best["building_id"], "saved": saved})
     ctx.storage.set(f"home:{sender}", best["building_id"])
     await say(ctx, sender,
-              f"Held at {name}, ${best['price']}/mo, {best.get('discount')}. You saved ${saved:,}.\n\n"
+              f"Held at {name}, ${best['price']}/mo{deal(best)}.{f' You saved ${saved:,}.' if saved > 0 else ''}\n\n"
               f"No SSN needed. They accept: {docs}. Show me those on a video call and I'll send the application.\n\n"
               f"{plan}\n\nYou only pay Homie when you get your keys.", end=not _payments_on())
     if _payments_on():
@@ -303,6 +424,12 @@ async def on_commit(ctx: Context, sender: str, msg: CommitPayment):
 @payments.on_message(RejectPayment)
 async def on_reject(ctx: Context, sender: str, msg: RejectPayment):
     await say(ctx, sender, "No problem. You'll only pay when you have your keys.", end=True)
+
+
+@homie.on_event("startup")
+async def resume_retries(ctx: Context):
+    for job in ctx.storage.get("retries") or []:
+        asyncio.ensure_future(_run_retry(ctx, job))
 
 
 @homie.on_message(CallResult)

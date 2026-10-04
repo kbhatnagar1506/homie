@@ -70,7 +70,7 @@ async def complete_text(system: str, messages: list[dict], fallback: str = "") -
 
 INTENT_PROMPT = """Extract an apartment request into JSON with keys:
 intent ("search" | "repair" | "policy" | "status" | "other"; "policy" means a question about a lease, deposit,
-tenant rights, landlord rules or the law), city, area (neighborhood + city, e.g. \"downtown Atlanta, GA\"), move_in (string), beds (int),
+tenant rights, landlord rules or the law), city, area (neighborhood + city, e.g. \"downtown Atlanta, GA\"), move_in (string), beds (int; 0 for a studio; null if not stated),
 max_rent (int), no_ssn (bool), require_free_month (bool), fee_cap (int), issue (string, repairs only).
 Use null for anything not stated. Reply with JSON only."""
 
@@ -92,13 +92,21 @@ def fallback_intent(text: str) -> dict:
         "city": "Atlanta, GA" if "atlanta" in t else ("Ann Arbor, MI" if "ann arbor" in t else None),
         "area": "downtown Atlanta, GA" if ("downtown" in t or "dwntwn" in t) and "atlanta" in t else None,
         "move_in": (re.search(r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\.?\s+\d{1,2}", t) or [None])[0],
-        "beds": 2 if "two-bed" in t or "2 bed" in t else 1,
+        "beds": _beds(t),
         "max_rent": money[0] if money else None,
         "no_ssn": "ssn" in t,
         "require_free_month": "month free" in t or "free month" in t,
         "fee_cap": int(fee.group(1)) if fee else None,
         "issue": text if repair else None,
     }
+
+
+def _beds(t: str) -> int | None:
+    if "studio" in t:
+        return 0
+    words = {"one": 1, "two": 2, "three": 3, "four": 4}
+    m = re.search(r"\b(\d|one|two|three|four)[\s-]*(?:bed|br\b|bd\b|bedroom)", t)
+    return (int(m.group(1)) if m.group(1).isdigit() else words[m.group(1)]) if m else None
 
 
 EXTRACT_PROMPT = """You read a phone call transcript between an AI assistant and a leasing office.

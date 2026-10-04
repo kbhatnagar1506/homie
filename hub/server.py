@@ -29,6 +29,7 @@ subscribers: set[asyncio.Queue] = set()
 
 def fresh_state() -> dict:
     return {
+        "agentlog": [],
         "request": {},
         "clock_day": 1,
         "offers": {},
@@ -41,11 +42,21 @@ def fresh_state() -> dict:
 
 
 state = fresh_state()
+history: dict[str, list[dict]] = {}  # per-user timeline; survives resets
+
+
+def remember(user: str, kind: str, text: str, **extra) -> None:
+    if not user:
+        return
+    items = history.setdefault(user, [])
+    items.append({"t": time.strftime("%H:%M:%S"), "ts": time.time(), "kind": kind, "text": text, **extra})
+    history[user] = items[-400:]
 
 
 async def publish() -> None:
+    snap = snapshot()
     for q in list(subscribers):
-        q.put_nowait(state)
+        q.put_nowait(snap)
 
 
 def log(text: str) -> None:
@@ -90,11 +101,30 @@ def get_state():
     return state
 
 
+def snapshot() -> dict:
+    return {**state, "users": sorted(history, key=lambda u: -history[u][-1]["ts"]), "history": history}
+
+
+@app.get("/api/history")
+def get_history(user: str = ""):
+    return {"user": user, "items": history.get(user, []), "users": list(history)}
+
+
+@app.post("/api/agentlog")
+async def agentlog(body: dict):
+    entry = {"t": time.strftime("%H:%M:%S"), **body}
+    state["agentlog"].append(entry)
+    state["agentlog"] = state["agentlog"][-120:]
+    remember(body.get("user", ""), "agent", f"{body['from']} → {body['to']}: {body.get('summary', '')}", frm=body["from"], to=body["to"])
+    await publish()
+    return {"ok": True}
+
+
 @app.get("/api/events")
 async def events(request: Request):
     q: asyncio.Queue = asyncio.Queue()
     subscribers.add(q)
-    q.put_nowait(state)
+    q.put_nowait(snapshot())
 
     async def stream():
         try:
@@ -115,6 +145,9 @@ async def reset(body: dict):
     global state
     state = fresh_state()
     state["request"] = body.get("request", {})
+    state["user"] = body.get("user", "")
+    remember(body.get("user", ""), "request", "New search: " + ", ".join(
+        f"{k}={v}" for k, v in body.get("request", {}).items() if v not in (None, "", []) and not k.startswith("_"))[:240])
     log("New request received")
     await publish()
     return {"ok": True}
@@ -182,6 +215,8 @@ async def twilio_stream(websocket: WebSocket, key: str):
 @app.post("/api/checklist")
 async def checklist(body: dict):
     state["checklist"][body["step"]] = {"status": body["status"], "detail": body.get("detail", "")}
+    if body["status"] in ("done", "blocked") and body.get("detail"):
+        remember(body.get("user", ""), "step", f"{body['step']}: {body['detail']}")
     await publish()
     return {"ok": True}
 
@@ -200,6 +235,7 @@ async def offers(body: dict):
 @app.post("/api/log")
 async def add_log(body: dict):
     log(body["text"])
+    remember(body.get("user", ""), "event", body["text"])
     await publish()
     return {"ok": True}
 

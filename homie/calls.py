@@ -50,7 +50,9 @@ async def place_call(building: dict, purpose: str, context: dict) -> dict:
         return await _twilio_call(building, purpose, context)
     if not MOCK_CALLS and ELEVENLABS_API_KEY and building.get("phone"):
         return await _real_call(building, purpose, context)
-    return await _mock_call(building, purpose, context)
+    if MOCK_CALLS:
+        return await _mock_call(building, purpose, context)
+    return {"answered": False, "summary": f"No phone line connected, so I couldn't call {building['name']}."}
 
 
 CALLER_PROMPT = (
@@ -180,7 +182,7 @@ async def _mock_call(building: dict, purpose: str, context: dict) -> dict:
     """Rehearsal only. With real buildings every number is simulated and labelled that way."""
     await asyncio.sleep(random.uniform(2.5, 6))
     m = building.get("mock") or _simulated(building)
-    tag = " (simulated, no real call placed)" if building.get("real") else ""
+    tag = " (simulated, no real call placed)"
     if purpose == "quote":
         return {
             "answered": True,

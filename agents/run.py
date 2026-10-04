@@ -18,6 +18,9 @@ if __name__ == "__main__":
         from agents.relay_bridge import bridge
 
         agents.append(bridge)
+    from homie.rpc import register
+
+    register(*agents)
     bureau = Bureau(agents=agents, port=8000)
     for a in agents:
         print(f"{a.name:20} {a.address}")

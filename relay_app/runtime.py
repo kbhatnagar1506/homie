@@ -8,6 +8,7 @@ group chat (or that contact's direct chat until the group exists).
 
 import asyncio
 import json
+import os
 import logging
 import re
 import uuid
@@ -22,7 +23,7 @@ from homie.buildings import BUILDINGS, listing_url
 from homie.config import ROOT, env
 from homie.screenshots import screenshot
 from homie.llm import complete_text, parse_intent
-from relay_app.team import GROUP_NAME, TEAM
+from relay_app.team import AGENT_ROLE, DISPLAY, GROUP_NAME, STYLE, TEAM
 
 log = logging.getLogger("homie.relay")
 STATE = ROOT / "data" / "relay_state.json"
@@ -41,6 +42,8 @@ class RelayTeam:
         self.awaiting_approval = False
         self.seen: set[str] = set()
         self.history: dict[str, list[dict]] = {}
+        self.recent: list[str] = []  # last few team-chat lines, so teammates react to each other
+        self._handoffs: dict[tuple[str, str], list[str]] = {}
 
     # ---------- setup ----------
 
@@ -63,6 +66,7 @@ class RelayTeam:
             self.handles[role] = me["handle"]
             if role == "homie":
                 self.owner = me["owner_people"][0]["handle"]
+                os.environ["RELAY_OWNER"] = self.owner
         log.info("Relay contacts: %s, owner %s", self.handles, self.owner)
         for role in self.relays:
             if role not in self.state["hello"]:
@@ -70,6 +74,7 @@ class RelayTeam:
         await self.ensure_team_chat()
         await self._ensure_members()
         events.subscribe(self.on_team_post)
+        events.subscribe_handoffs(self.on_handoff)
         await asyncio.gather(*(self._listen(role) for role in self.relays))
 
     async def _hello(self, role: str) -> None:
@@ -134,7 +139,40 @@ class RelayTeam:
             log.warning("Relay send from %s failed: %s", role, e)
 
     async def in_voice(self, role: str, update: str) -> str:
-        return await complete_text(TEAM[role].voice, [{"role": "user", "content": f"Text the student this update in your own words. Keep every number, name and date exactly:\n{update}"}], fallback=update)
+        """The orchestrator: every message is written with the renter's memory (Mapi), the live state and the team's recent chat."""
+        from homie import mapi
+
+        known = "; ".join(m["content"] for m in await mapi.recall(update, limit=5, tags=["profile"]))
+        system = (
+            f"{TEAM[role].voice}\nStyle: {STYLE.get(role, '')}\n"
+            "You're texting in the 'Homie Team' group chat with the renter and your teammates (Homie, Calls, Papers, Fix, Policy, Pics). "
+            "Write ONE short, human message (1-2 sentences) with real emotion and 1-2 fitting emoji, like a teammate texting a friend. "
+            "React to teammates by name when it fits, never repeat what someone just said, no markdown, no lists unless it's prices. "
+            "Keep every number, name and date exactly as given. Never invent facts."
+            + (f"\nWhat you remember about the renter (use only if relevant): {known}" if known else "")
+            + ("\nRecent team chat:\n" + "\n".join(self.recent[-8:]) if self.recent else "")
+        )
+        text = await complete_text(system, [{"role": "user", "content": f"Your update to share:\n{update}"}], fallback=update)
+        self.recent.append(f"{DISPLAY.get(role, role)}: {text}")
+        self.recent = self.recent[-12:]
+        return text
+
+    async def on_handoff(self, sender: str, receiver: str, summary: str) -> None:
+        """Homie handing work to a teammate shows up in the team chat; bursts (six calls at once) become one message."""
+        frm, to = AGENT_ROLE.get(sender), AGENT_ROLE.get(receiver)
+        if not frm or not to or frm == to or frm != "homie":
+            return
+        key = (frm, to)
+        first = key not in self._handoffs
+        self._handoffs.setdefault(key, []).append(summary)
+        if not first:
+            return
+        await asyncio.sleep(1.5)
+        items = self._handoffs.pop(key, [])
+        chat_id = self._chat_for(frm)
+        if chat_id:
+            ask = f"Hand this to {DISPLAY.get(to, to)} by name: " + ("; ".join(items[:6]) + (f" (+{len(items) - 6} more)" if len(items) > 6 else ""))
+            await self.send(frm, chat_id, await self.in_voice(frm, ask))
 
     async def on_team_post(self, role: str, text: str, images: list[str] | None = None) -> None:
         chat_id = self._chat_for(role)
@@ -149,6 +187,10 @@ class RelayTeam:
         if text.rstrip().endswith("Approve?"):
             self.awaiting_approval = True
             await self.send("homie", chat_id, await self.in_voice("homie", text), buttons=["Approve", "Keep looking"])
+            return
+        if text.rstrip().endswith("Studio, 1, 2 or 3?"):
+            self.awaiting_approval = True  # their next message answers Homie directly
+            await self.send("homie", chat_id, await self.in_voice("homie", text), buttons=["Studio", "1 bedroom", "2 bedrooms", "3 bedrooms"])
             return
         await self.send(role, chat_id, await self.in_voice(role, text))
         if text.startswith("Offers so far"):
@@ -274,8 +316,11 @@ class RelayTeam:
             await self.send_to_homie(text + (f"\n\nKnown preferences: {prefs}" if prefs and intent["intent"] == "search" else ""))
             return
 
+        from homie import mapi
+
+        recalled = "; ".join(m["content"] for m in await mapi.recall(text, limit=6))
         status = await hub.get("/api/state")
-        context = (f"What you remember about them: {prefs or 'nothing yet'}.\n"
+        context = (f"What you remember about them: {prefs or 'nothing yet'}. Related memories: {recalled or 'none'}.\n"
                    f"Live status: {json.dumps({k: status.get(k) for k in ('checklist', 'offers', 'application', 'repairs')})[:3000]}")
         history = self.history.setdefault(f"{role}:{chat_id}", [])
         history.append({"role": "user", "content": text})

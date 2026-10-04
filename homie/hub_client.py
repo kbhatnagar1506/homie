@@ -10,6 +10,9 @@ log = logging.getLogger(__name__)
 
 
 async def post(path: str, payload: dict) -> dict:
+    from homie.scope import CURRENT_USER
+
+    payload = {"user": CURRENT_USER.get(), **payload}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(f"{HUB_URL}{path}", json=payload)

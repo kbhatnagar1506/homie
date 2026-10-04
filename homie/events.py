@@ -18,3 +18,16 @@ def team_post(role: str, text: str, images: list[str] | None = None) -> None:
     for fn in _listeners:
         task = asyncio.ensure_future(fn(role, text, images or []))
         task.add_done_callback(lambda t: t.exception() and log.warning("team_post failed: %s", t.exception()))
+
+
+_handoff_listeners: list[Callable[..., Awaitable[None]]] = []
+
+
+def subscribe_handoffs(fn: Callable[..., Awaitable[None]]) -> None:
+    _handoff_listeners.append(fn)
+
+
+def handoff(sender: str, receiver: str, summary: str) -> None:
+    """An agent just gave another agent work. The Relay team chat narrates it."""
+    for fn in _handoff_listeners:
+        asyncio.ensure_future(fn(sender, receiver, summary))
