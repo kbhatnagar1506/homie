@@ -114,12 +114,23 @@ def get_state():
 
 
 def snapshot() -> dict:
-    return {**state, "users": sorted(history, key=lambda u: -history[u][-1]["ts"]), "history": history}
+    return {**state, "users": sorted(history, key=lambda u: -history[u][-1]["ts"]), "history": history, "tasks": tasks}
 
 
 @app.get("/api/history")
 def get_history(user: str = ""):
     return {"user": user, "items": history.get(user, []), "users": list(history)}
+
+
+tasks: list[dict] = []
+
+
+@app.post("/api/tasks")
+async def set_tasks(body: dict):
+    global tasks
+    tasks = body.get("tasks", [])
+    await publish()
+    return {"ok": True}
 
 
 @app.post("/api/agentlog")

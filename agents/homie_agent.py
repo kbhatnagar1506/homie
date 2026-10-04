@@ -25,7 +25,7 @@ from uagents_core.contrib.protocols.payment import (
     payment_protocol_spec,
 )
 
-from agents.specialists import caller, memory, negotiator, paperwork, pictures, policy, repairs
+from agents.specialists import caller, later, memory, negotiator, paperwork, pictures, policy, repairs
 from homie import hub_client as hub
 from homie import mapi
 from homie.config import PUBLIC_URL, ROOT, env, seed
@@ -42,6 +42,9 @@ from homie.models import (
     NegotiateResult,
     PaperworkRequest,
     PaperworkResult,
+    ScheduleRequest,
+    ScheduleResult,
+    TaskDue,
     MemoryRequest,
     MemoryResult,
     PicturesRequest,
@@ -123,6 +126,13 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
         await handle_policy(ctx, sender, text)
     elif intent["intent"] == "status":
         await say(ctx, sender, await status_line(), end=True)
+    elif intent["intent"] == "schedule":
+        last = ctx.storage.get(f"lastreq:{sender}") or {}
+        res = await ask(ctx, later.address, ScheduleRequest(text=text, payload={"sender": sender, "req": last}), 40)
+        if isinstance(res, ScheduleResult):
+            await say(ctx, sender, f"Done ⏰ {res.when_human} I'll take care of it: {text}", end=True)
+        else:
+            await say(ctx, sender, "I couldn't schedule that just now. Try again in a minute?", end=True)
     elif intent["intent"] == "memory":
         mem = await ask(ctx, memory.address, MemoryRequest(question=text), 30)
         await say(ctx, sender, (mem.answer if isinstance(mem, MemoryResult) and mem.answer else "I don't know that about you yet. Tell me and I'll remember."), end=True)
@@ -188,6 +198,7 @@ async def start_search(ctx: Context, sender: str, req: dict) -> None:
 
 
 async def handle_search(ctx: Context, sender: str, req: dict) -> None:
+    ctx.storage.set(f"lastreq:{sender}", {k: v for k, v in req.items() if not k.startswith("_")})
     area = req.get("area") or req.get("city") or env("DEFAULT_AREA", "downtown Atlanta, GA")
     budget = req.get("max_rent")
     beds = req.get("beds") if req.get("beds") is not None else 1
@@ -198,7 +209,7 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
     await hub.step("find", "active", f"Searching apartments in {area}")
     if env("DEMO_BUILDINGS", "0") != "1":
         try:
-            found = [b for b in await search_apartments(area, limit=12) if b.get("phone")]
+            found = [b for b in await search_apartments(area, limit=16) if b.get("phone")]
         except Exception as e:
             ctx.logger.error(f"Places search failed: {e}")
             found = []
@@ -206,7 +217,7 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
             await hub.step("find", "blocked", "Search failed")
             await say(ctx, sender, f"I couldn't search {area} just now. Try again in a minute.", end=True)
             return
-        use(found[: int(env("MAX_CALLS", "6"))])
+        use(found[: int(env("MAX_CALLS", "10"))])
     await hub.post("/api/buildings", {"buildings": list(BUILDINGS.values())})
     open_now = sum(1 for b in BUILDINGS.values() if b.get("open_now"))
     await say(ctx, sender,
@@ -228,7 +239,9 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
             offers.append(reply.dict())
     if budget:
         offers = [o for o in offers if o["price"] <= budget] or offers
-    unanswered = [b for b, r in zip(BUILDINGS, replies) if not (isinstance(r, CallResult) and r.answered)]
+    unanswered = [b for b, r in zip(BUILDINGS, replies) if not (isinstance(r, CallResult) and r.answered)
+                  or "call back" in (r.summary or "").lower()]
+    await hub.log_event(f"Calling session over: {len(offers)} offers, {len(unanswered)} offices to call back")
     if not offers:
         await recover_without_calls(ctx, sender, req, unanswered, label)
         return
@@ -283,10 +296,15 @@ async def schedule_retry(ctx: Context, sender: str, req: dict, building_ids: lis
     when = min((next_open(b.get("hours") or []) for b in buildings), default=next_open([]))
     job = {"sender": sender, "req": {k: v for k, v in req.items() if not k.startswith("_")}, "buildings": buildings,
            "when": when.isoformat(), "target": target}
-    jobs = [j for j in (ctx.storage.get("retries") or []) if j["sender"] != sender] + [job]
-    ctx.storage.set("retries", jobs)
-    asyncio.ensure_future(_run_retry(ctx, job))
-    await hub.log_event(f"Callbacks scheduled {human(when)} for {len(buildings)} offices")
+    res = await ask(ctx, later.address, ScheduleRequest(text=f"Call {len(buildings)} offices to get offers when they open",
+                                                        kind="get_offers", when_iso=when.isoformat(), payload=job), 30)
+    from homie.events import team_post
+
+    names = ", ".join(b["name"] for b in buildings[:4]) + (f" and {len(buildings) - 4} more" if len(buildings) > 4 else "")
+    team_post("homie", f"Calling session done. Homie Later will call {names} back {human(when)}"
+                       + (f", with ${target}/mo as the price to beat." if target else "."))
+    if not isinstance(res, ScheduleResult):  # Later unavailable: keep the callback in-process
+        asyncio.ensure_future(_run_retry(ctx, job))
     return when
 
 
@@ -454,9 +472,34 @@ async def on_reject(ctx: Context, sender: str, msg: RejectPayment):
     await say(ctx, sender, "No problem. You'll only pay when you have your keys.", end=True)
 
 
+@homie.on_message(TaskDue)
+async def on_task_due(ctx: Context, sender: str, task: TaskDue):
+    """Homie Later woke up: do the task."""
+    CURRENT_USER.set(task.user)
+    p = task.payload or {}
+    who = p.get("sender")
+    if task.kind == "get_offers" and p.get("buildings"):
+        await _run_retry(ctx, p)
+    elif task.kind in ("get_offers", "check_prices") and who and (p.get("req") or {}):
+        await say(ctx, who, f"⏰ It's time: {task.text}. Starting now.")
+        await start_search(ctx, who, dict(p["req"]))
+    elif task.kind == "follow_up_repair" and who:
+        await handle_repair(ctx, who, {"issue": f"Follow-up: {task.text}"})
+    else:
+        from homie.events import team_post
+
+        import re as _re
+
+        what = _re.sub(r"^(please\s+)?remind me\s+(in\s+[\w\s]+?\s+(to|that|about)\s+|(to|that|about)\s+)?", "", task.text, flags=_re.I).strip() or task.text
+        what = _re.sub(r"\bmy\b", "your", what)
+        team_post("homie", f"⏰ Reminder: {what}")
+        if who:
+            await say(ctx, who, f"⏰ Reminder: {what}", end=True)
+
+
 @homie.on_event("startup")
 async def resume_retries(ctx: Context):
-    for job in ctx.storage.get("retries") or []:
+    for job in ctx.storage.get("retries") or []:  # older callbacks from before Homie Later existed
         asyncio.ensure_future(_run_retry(ctx, job))
 
 
@@ -467,6 +510,7 @@ async def resume_retries(ctx: Context):
 @homie.on_message(PolicyResult)
 @homie.on_message(PicturesResult)
 @homie.on_message(MemoryResult)
+@homie.on_message(ScheduleResult)
 async def on_specialist_reply(ctx: Context, sender: str, msg):
     resolve(msg)
 

@@ -25,7 +25,7 @@ from uagents import Agent, Bureau, Context  # noqa: E402
 from uagents_core.contrib.protocols.chat import ChatAcknowledgement, ChatMessage, EndSessionContent, TextContent  # noqa: E402
 
 from agents.homie_agent import homie  # noqa: E402
-from agents.specialists import caller, memory, negotiator, paperwork, pictures, policy, repairs  # noqa: E402
+from agents.specialists import caller, later, memory, negotiator, paperwork, pictures, policy, repairs  # noqa: E402
 from homie.config import HUB_URL  # noqa: E402
 from homie.rpc import register  # noqa: E402
 
@@ -162,5 +162,5 @@ async def finish():
 if __name__ == "__main__":
     if "--voice-only" in sys.argv:
         asyncio.run(finish())
-    register(homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, student)
-    Bureau(agents=[homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, student], port=8002).run()
+    register(homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, later, student)
+    Bureau(agents=[homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, later, student], port=8002).run()

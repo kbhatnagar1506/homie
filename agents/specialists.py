@@ -6,6 +6,7 @@ with messages, and Negotiator and Repairs hire the Caller themselves.
 
 import asyncio
 import uuid
+from datetime import datetime
 
 from uagents import Agent, Context
 
@@ -30,6 +31,9 @@ from homie.models import (
     PolicyResult,
     PaperworkRequest,
     PaperworkResult,
+    ScheduleRequest,
+    ScheduleResult,
+    TaskDue,
     MemoryRequest,
     MemoryResult,
     PicturesRequest,
@@ -50,7 +54,7 @@ async def _log_activity(role: str, text: str, images: list[str]) -> None:
 events.subscribe(_log_activity)
 
 
-AVATARS = {"memory": "memory", "caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
+AVATARS = {"later": "later", "memory": "memory", "caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
 
 
 def specialist(role: str, description: str, concurrent: bool = True) -> Agent:
@@ -66,6 +70,7 @@ negotiator = specialist("negotiator", "Negotiates apartment offers using competi
 paperwork = specialist("paperwork", "No-SSN rental paperwork: documents, applications, cashier's-check plans. Part of Homie.", concurrent=False)
 repairs = specialist("repairs", "Files repairs, calls the office, retries and emails until it is booked. Part of Homie.")
 policy = specialist("policy", "Plain-English lease and tenant-rights help for Georgia and US renters. Part of Homie.")
+later = specialist("later", "The waiting agent: holds future tasks (get offers Monday, call when the office opens, rent reminders) and runs them on time. Part of Homie.")
 memory = specialist("memory", "Long-term memory of everything a renter has told Homie, stored in Mapi. Ask it anything about them. Part of Homie.")
 pictures = specialist("pictures", "Opens apartment listings in a real browser and sends screenshots. Part of Homie.")
 
@@ -260,6 +265,76 @@ async def on_policy(ctx: Context, sender: str, req: PolicyRequest):
                                  fallback="I couldn't reach my legal notes just now. For anything urgent, Michigan Legal Help (michiganlegalhelp.org) is free.")
     await hub.log_event("Policy question answered")
     await ctx.send(sender, PolicyResult(request_id=req.request_id, answer=answer))
+
+
+# ---------- Later: the waiting agent ----------
+
+WHEN_PROMPT = """Today is {now} in Atlanta (America/New_York). The renter wants something done later: "{text}".
+Return JSON {{"when_iso": ISO 8601 datetime with -04:00 or -05:00 offset, "explicit": true if they named a time or day}}.
+Business-type tasks default to 10:15 AM on the named day; "when they open" means 10:15 AM the next business day. JSON only."""
+
+
+async def _publish_tasks(ctx: Context) -> None:
+    from homie.schedule import human
+
+    tasks = ctx.storage.get("tasks") or []
+    await hub.post("/api/tasks", {"tasks": [{**{k: t[k] for k in ("task_id", "kind", "text", "when_iso", "user")},
+                                             "when_human": human(datetime.fromisoformat(t["when_iso"]))} for t in tasks]})
+
+
+@later.on_message(ScheduleRequest, replies=ScheduleResult)
+async def on_schedule(ctx: Context, sender: str, req: ScheduleRequest):
+    CURRENT_USER.set(req.user)
+    from homie import jev
+    from homie.schedule import TZ, human, next_open
+
+    kind = req.kind or await jev.task_kind(req.text) or "remind"
+    when = None
+    if req.when_iso:
+        when = datetime.fromisoformat(req.when_iso)
+    else:
+        parsed = await complete_json(WHEN_PROMPT.format(now=datetime.now(TZ).strftime("%A %Y-%m-%d %H:%M"), text=req.text), req.text)
+        try:
+            when = datetime.fromisoformat(parsed["when_iso"]) if parsed and parsed.get("when_iso") else None
+        except ValueError:
+            when = None
+    if not when or when <= datetime.now(TZ):
+        when = next_open([])
+    task = {"task_id": f"T-{uuid.uuid4().hex[:6].upper()}", "kind": kind, "text": req.text, "when_iso": when.isoformat(),
+            "user": req.user, "payload": req.payload}
+    ctx.storage.set("tasks", (ctx.storage.get("tasks") or []) + [task])
+    asyncio.ensure_future(_wait_and_run(ctx, task))
+    await _publish_tasks(ctx)
+    note = f"⏰ {human(when)}: {req.text}"
+    await hub.log_event(f"Homie Later scheduled {task['task_id']} ({kind}) for {human(when)}")
+    await ctx.send(sender, ScheduleResult(request_id=req.request_id, task_id=task["task_id"], kind=kind,
+                                          when_iso=task["when_iso"], when_human=human(when), note=note))
+
+
+async def _wait_and_run(ctx: Context, task: dict) -> None:
+    from homie.rpc import address_of
+    from homie.schedule import TZ
+
+    delay = (datetime.fromisoformat(task["when_iso"]) - datetime.now(TZ)).total_seconds()
+    await asyncio.sleep(max(0, delay))
+    remaining = [t for t in (ctx.storage.get("tasks") or []) if t["task_id"] != task["task_id"]]
+    if len(remaining) == len(ctx.storage.get("tasks") or []):
+        return  # cancelled
+    ctx.storage.set("tasks", remaining)
+    await _publish_tasks(ctx)
+    CURRENT_USER.set(task.get("user", ""))
+    await hub.log_event(f"Homie Later: running {task['task_id']} ({task['kind']})")
+    homie_addr = address_of("homie")
+    if homie_addr:
+        await ctx.send(homie_addr, TaskDue(task_id=task["task_id"], kind=task["kind"], text=task["text"],
+                                           payload=task["payload"], user=task.get("user", "")))
+
+
+@later.on_event("startup")
+async def resume_tasks(ctx: Context):
+    for task in ctx.storage.get("tasks") or []:
+        asyncio.ensure_future(_wait_and_run(ctx, task))
+    await _publish_tasks(ctx)
 
 
 # ---------- Memory (Mapi) ----------

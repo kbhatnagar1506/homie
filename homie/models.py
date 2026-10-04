@@ -118,3 +118,31 @@ class MemoryResult(Model):
     user: str = ""
     answer: str = ""
     facts: list[str] = []
+
+
+class ScheduleRequest(Model):
+    request_id: str = ""
+    user: str = ""
+    text: str = ""              # what they asked, in their words
+    kind: str = ""              # get_offers | call_building | remind | follow_up_repair | check_prices (Jev decides if empty)
+    when_iso: str = ""          # exact time if the caller already knows it
+    payload: dict = {}          # what the task needs to run (sender, request, buildings, target)
+
+
+class ScheduleResult(Model):
+    request_id: str = ""
+    user: str = ""
+    task_id: str = ""
+    kind: str = ""
+    when_iso: str = ""
+    when_human: str = ""
+    note: str = ""
+
+
+class TaskDue(Model):
+    request_id: str = ""
+    user: str = ""
+    task_id: str = ""
+    kind: str = ""
+    text: str = ""
+    payload: dict = {}

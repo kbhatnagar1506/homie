@@ -21,6 +21,10 @@ def register(*agents) -> None:
         NAMES[a.address] = a.name
 
 
+def address_of(name: str) -> str | None:
+    return next((a for a, n in NAMES.items() if n == name), None)
+
+
 def name_of(address: str) -> str:
     return NAMES.get(address, address[:12] + "…")
 

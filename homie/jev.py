@@ -81,6 +81,7 @@ ROUTES = {
     "status": "They are asking for an update on what the team is doing",
     "memory": "They ask what Homie knows about them, or tell it something to remember",
     "pictures": "They want photos or screenshots of a listing",
+    "schedule": "They want Homie to do something later, at a time or day, or to remind them",
     "chat": "Greeting, thanks, small talk or anything else",
 }
 BEDROOMS = {"unspecified": "They did not say how many bedrooms", "studio": "A studio", "one": "One bedroom",
@@ -181,3 +182,17 @@ async def is_emergency(issue: str) -> bool:
         "emergency": Noul(instructions="Is this a safety emergency (gas smell, fire, flooding, no heat in freezing weather, no water, electrical sparks)?"),
     }, label="repair triage")
     return yes(a["emergency"], 0.7) if a else False
+
+
+TASK_KINDS = {
+    "get_offers": "Get apartment offers or prices from leasing offices at a later time",
+    "call_building": "Call one specific building or office later",
+    "remind": "Remind the renter about something (rent, a viewing, documents, a deadline)",
+    "follow_up_repair": "Check on or chase a repair later",
+    "check_prices": "Re-check advertised prices or specials later",
+}
+
+
+async def task_kind(text: str) -> str | None:
+    a = await ask({"future_task": text}, {"kind": Choice(instructions="What kind of future task is this?", criteria=TASK_KINDS)}, label="schedule task")
+    return pick(a["kind"], 0.5) if a else None

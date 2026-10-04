@@ -17,7 +17,7 @@ from uagents_core.contrib.protocols.chat import ChatAcknowledgement, ChatMessage
 os.environ["AGENTVERSE_MAILBOX"] = "0"  # local rehearsal: no Agentverse connection needed
 
 from agents.homie_agent import homie  # noqa: E402
-from agents.specialists import caller, negotiator, memory, paperwork, pictures, policy, repairs
+from agents.specialists import caller, later, negotiator, memory, paperwork, pictures, policy, repairs
 
 DEMO = ("I'm moving to downtown Atlanta on Aug 20. One-bedroom under $2,000. No SSN. "
         "Book it if there's a month free.")
@@ -56,5 +56,5 @@ async def ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
 if __name__ == "__main__":
     from homie.rpc import register
 
-    register(homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, student)
-    Bureau(agents=[homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, student], port=8001).run()
+    register(homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, later, student)
+    Bureau(agents=[homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, later, student], port=8001).run()

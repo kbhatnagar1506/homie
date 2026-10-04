@@ -92,6 +92,9 @@
   .route { font-size:11px; color:var(--dim); font-weight:600; }
   .route i { font-style:normal; color:var(--faint); font-weight:500; margin-left:6px; }
   .bubble p { margin:2px 0 0; font-size:13px; overflow-wrap:anywhere; }
+  .tasks { display:flex; flex-direction:column; gap:8px; }
+  .task { display:flex; gap:10px; align-items:center; padding:9px 11px; border-radius:12px; background:rgba(255,180,138,.07); border:1px solid rgba(255,180,138,.25); font-size:13px; }
+  .task b { color:#ffb48a; font-weight:600; white-space:nowrap; } .task small { color:var(--faint); margin-left:auto; white-space:nowrap; font-family:"JetBrains Mono", monospace; }
   .timeline { margin-top:14px; max-height:30vh; overflow:auto; border-left:1px solid var(--line2); padding-left:14px; }
   .tl { position:relative; padding:0 0 10px; font-size:12.5px; color:#cfd6e0; }
   .tl::before { content:""; position:absolute; left:-18.5px; top:5px; width:8px; height:8px; border-radius:50%; background:var(--faint); }
@@ -113,7 +116,7 @@
 </header>
 <main>
   <section class="panel">
-    <h2>Agents <span class="count" id="agentcount">8 Fetch.ai agents · Jev orchestrating</span></h2>
+    <h2>Agents <span class="count" id="agentcount">9 Fetch.ai agents · Jev orchestrating</span></h2>
     <svg id="net" viewBox="0 0 400 400"></svg>
     <div class="request"><div class="who" id="reqwho">Waiting for a request</div><div id="req">Text Homie on Relay or ask @homie-usa on ASI:One.</div></div>
     <div class="steps" id="steps"></div>
@@ -127,6 +130,8 @@
   <section class="panel chatter">
     <h2>Agents talking <span class="count" id="msgcount"></span></h2>
     <div class="feed" id="feed"></div>
+    <h2 style="margin-top:18px">Up next ⏰ <span class="count" id="taskcount"></span></h2>
+    <div id="tasks" class="tasks"></div>
     <h2 style="margin-top:18px">History <span class="count" id="histwho">all users</span></h2>
     <div class="timeline" id="timeline"></div>
   </section>
@@ -135,9 +140,9 @@
 const AGENTS = [
   ["homie", "Homie", "homie"], ["jev", "Jev", "jev"], ["homie-caller", "Calls", "calls"], ["homie-negotiator", "Negotiator", "negotiator"],
   ["homie-paperwork", "Papers", "papers"], ["homie-repairs", "Fix", "fix"], ["homie-policy", "Policy", "policy"],
-  ["homie-pictures", "Pics", "pics"], ["homie-memory", "Memory", "memory"],
+  ["homie-pictures", "Pics", "pics"], ["homie-memory", "Memory", "memory"], ["homie-later", "Later", "later"],
 ];
-const COLORS = { jev:"#c9a7ff", homie:"var(--homie)", calls:"var(--calls)", negotiator:"var(--negotiator)", papers:"var(--papers)", fix:"var(--fix)", policy:"var(--policy)", pics:"var(--pics)", memory:"var(--memory)" };
+const COLORS = { later:"#ffb48a", jev:"#c9a7ff", homie:"var(--homie)", calls:"var(--calls)", negotiator:"var(--negotiator)", papers:"var(--papers)", fix:"var(--fix)", policy:"var(--policy)", pics:"var(--pics)", memory:"var(--memory)" };
 const STEPS = [["find","Find"],["offers","Offers"],["negotiate","Negotiate"],["paperwork","Papers"],["held","Hold"],["keys","Keys"]];
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -232,6 +237,11 @@ function render(s) {
   const all = s.agentlog || [];
   for (const m of all.slice(seen)) flash(m.from, m.to);
   seen = all.length;
+  // up next
+  const tasks = (s.tasks || []).filter(t => !who || t.user === who).sort((a, b) => a.when_iso.localeCompare(b.when_iso));
+  $("taskcount").textContent = tasks.length ? tasks.length + " scheduled" : "";
+  const left = iso => { const m = Math.round((new Date(iso) - Date.now()) / 60000); return m < 60 ? m + "m" : m < 1440 ? Math.round(m / 60) + "h" : Math.round(m / 1440) + "d"; };
+  $("tasks").innerHTML = tasks.map(t => `<div class="task"><img src="/avatars/later.png" style="width:24px;height:24px;border-radius:7px"><div><b>${esc(t.when_human)}</b> · ${esc(t.text)}</div><small>in ${left(t.when_iso)}</small></div>`).join("") || '<div class="tl" style="border:0">Nothing scheduled.</div>';
   // history
   const items = who ? (s.history || {})[who] || [] : Object.entries(s.history || {}).flatMap(([u, xs]) => xs.map(x => ({ ...x, u }))).sort((a, b) => a.ts - b.ts);
   $("histwho").textContent = who || "all users";
