@@ -72,12 +72,12 @@
   .meta { color:var(--dim); font-size:12px; margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
   .tag { padding:2px 8px; border-radius:99px; background:rgba(255,255,255,.05); border:1px solid var(--line); }
   .tag.open { color:var(--good); border-color:rgba(61,220,132,.35); } .tag.closed { color:var(--faint); }
-  .applycard { margin-top:14px; border:1px solid var(--line); border-radius:14px; overflow:hidden; background:rgba(255,255,255,.02); }
-  .applycard .ah { display:flex; align-items:center; gap:10px; padding:10px 14px; font-size:13px; border-bottom:1px solid var(--line); }
-  .applycard .ah b { font-weight:600; } .applycard .ah .dot { width:8px; height:8px; border-radius:50%; background:var(--good); box-shadow:0 0 8px var(--good); }
-  .applycard .ah a { margin-left:auto; color:var(--dim); font-size:12px; }
-  .applycard iframe { width:100%; height:420px; border:0; display:block; background:#0b0d12; }
-  .applycard .res { padding:10px 14px; font-size:12px; color:var(--dim); white-space:pre-wrap; }
+  .applycard { position:relative; margin-top:14px; border-radius:14px; overflow:hidden; background:#0b0d12; border:1px solid var(--line); aspect-ratio: 16 / 10; }
+  .applycard iframe { position:absolute; inset:0; width:100%; height:100%; border:0; display:block; }
+  .applycard .tagline { position:absolute; left:10px; top:10px; z-index:2; display:flex; align-items:center; gap:7px; padding:5px 10px; border-radius:99px;
+                        background:rgba(8,10,14,.72); backdrop-filter:blur(6px); font-size:11.5px; color:#e8edf3; pointer-events:none; }
+  .applycard .tagline i { width:7px; height:7px; border-radius:50%; background:var(--good); box-shadow:0 0 8px var(--good); }
+  .applycard .full { position:absolute; right:10px; top:10px; z-index:2; padding:5px 9px; border-radius:99px; background:rgba(8,10,14,.72); color:#cfd6e2; font-size:11.5px; text-decoration:none; }
   .status { position:static; display:inline-block; margin-bottom:8px; font-size:11px; padding:2px 8px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--dim); }
   .status.calling { color:var(--warn); background:rgba(245,182,66,.12); animation:blink 1.2s infinite; }
   .status.good { color:var(--good); background:rgba(61,220,132,.1); } .status.bad { color:var(--faint); }
@@ -300,11 +300,10 @@ function render(s) {
     if (!card) { card = document.createElement("div"); card.id = "applycard"; card.className = "applycard"; $("result").after(card); }
     if (card.dataset.run !== ap.run_id) {
       card.dataset.run = ap.run_id;
-      card.innerHTML = `<div class="ah"><span class="dot"></span><b>Papers is applying at ${esc(ap.building)}</b><span id="apstatus"></span>${ap.share_url ? `<a href="${esc(ap.share_url)}" target="_blank" rel="noopener">open full screen ↗</a>` : ""}</div>`
-        + (ap.live_url ? `<iframe src="${esc(ap.live_url)}" allow="clipboard-read; clipboard-write" title="Live application"></iframe>` : "") + `<div class="res" id="apres"></div>`;
+      card.innerHTML = (ap.live_url ? `<iframe src="${esc(ap.live_url)}&ui=false" allow="clipboard-read; clipboard-write" title="Live application"></iframe>` : "")
+        + `<div class="tagline"><i></i>Papers · ${esc(ap.building)}</div>`
+        + (ap.share_url ? `<a class="full" href="${esc(ap.share_url)}" target="_blank" rel="noopener">↗</a>` : "");
     }
-    document.getElementById("apstatus").textContent = " · " + (ap.status || "");
-    document.getElementById("apres").textContent = ap.result || "Fills your name, email and move-in, then stops at the password. That last click is yours.";
   }
   if (bestId && s.offers[bestId]) { const b = s.offers[bestId]; $("result").style.display = "block"; $("result").innerHTML = `🔑 Held at ${esc(b.name)} · $${b.price}/mo${s.session.saved > 0 ? ` · saved $${s.session.saved.toLocaleString()}` : ""}`; }
   else $("result").style.display = "none";

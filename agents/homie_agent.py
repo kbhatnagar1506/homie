@@ -32,7 +32,7 @@ from homie import mapi
 from homie.config import PUBLIC_URL, ROOT, env, seed
 from homie.buildings import BUILDINGS, can_call_now, use
 from homie.schedule import TZ, human, next_open
-from homie.llm import _beds, parse_intent
+from homie.llm import complete_json, _beds, parse_intent
 from homie.places import search_apartments
 from homie.events import team_post
 from homie.rpc import ask, name_of, resolve
@@ -107,7 +107,7 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
         return
     ctx.logger.info(f"{sender}: {text}")
     CURRENT_USER.set(user_label(sender))
-    pending = approvals.get(sender)
+    pending = approvals.get(sender) or applicant_wait.get(sender)
     if pending and not pending.done():
         pending.set_result(text)
         return
@@ -654,6 +654,44 @@ async def finalize(ctx: Context, sender: str, best: dict, offers: list[dict], re
     await say(ctx, sender, "That's everything from me for now 🏠", end=True)
 
 
+applicant_wait: dict[str, asyncio.Future] = {}
+EMAIL = r"[\w.+-]+@[\w-]+\.[\w.-]+"
+NAME_PROMPT = """Pull the person's own name and email out of this message. Return JSON {"first": str, "last": str, "email": str}, empty strings if missing."""
+
+
+async def applicant(ctx: Context, sender: str) -> dict | None:
+    """Whoever is renting: their saved details, else what memory knows, else ask them once."""
+    import re as _re
+
+    saved = ctx.storage.get(f"applicant:{sender}")
+    if saved:
+        return saved
+    known = " ".join(m.get("content", "") for m in await mapi.recall("my name and email address", limit=8))
+    email = _re.search(EMAIL, known)
+    if not email and env("APPLICANT_EMAIL"):  # demo default from .env, so the demo never stops to ask
+        first, _, last = env("APPLICANT_NAME", "").partition(" ")
+        return {"first": first or "Renter", "last": last, "email": env("APPLICANT_EMAIL")}
+    if not email:
+        loop = asyncio.get_event_loop()
+        applicant_wait[sender] = loop.create_future()
+        await say(ctx, sender, "Last thing: what name and email should go on the application? I'll fill everything in live.")
+        try:
+            reply = await asyncio.wait_for(applicant_wait[sender], float(env("APPLICANT_WAIT_SECONDS", "300")))
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            applicant_wait.pop(sender, None)
+        known, email = reply, _re.search(EMAIL, reply)
+        if not email:
+            return None
+    parsed = await complete_json(NAME_PROMPT, known[:2000]) or {}
+    who = {"first": (parsed.get("first") or "").strip() or email.group(0).split("@")[0].split(".")[0].title(),
+           "last": (parsed.get("last") or "").strip(), "email": email.group(0)}
+    ctx.storage.set(f"applicant:{sender}", who)
+    await mapi.remember(f"Name for applications: {who['first']} {who['last']}. Email: {who['email']}.", tags=["profile"], source="homie")
+    return who
+
+
 async def start_application(ctx: Context, sender: str, building_id: str, req: dict) -> None:
     """Papers opens the building's real application in a live browser and fills it, stopping before the password."""
     from homie import cache
@@ -663,7 +701,12 @@ async def start_application(ctx: Context, sender: str, building_id: str, req: di
     url = facts.get("application_url") or b.get("website") or ""
     if not url:
         return
-    res = await ask(ctx, paperwork.address, ApplyRequest(building_id=building_id, url=url, move_in=req.get("move_in"), beds=req.get("beds")), 45)
+    who = await applicant(ctx, sender)
+    if not who:
+        await say(ctx, sender, f"No worries, I'll start the {b.get('name')} application whenever you send your name and email.")
+        return
+    res = await ask(ctx, paperwork.address, ApplyRequest(building_id=building_id, url=url, move_in=req.get("move_in"), beds=req.get("beds"),
+                                                         first_name=who["first"], last_name=who["last"], email=who["email"]), 45)
     if isinstance(res, ApplyResult) and res.share_url:
         await hub.step("keys", "active", "Application filling live")
         await say(ctx, sender, f"🖥️ Papers is filling out your application at {b.get('name')} right now, live. Watch it here:\n{res.share_url}\n"

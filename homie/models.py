@@ -208,6 +208,9 @@ class ApplyRequest(Model):
     user: str = ""
     building_id: str = ""
     url: str = ""
+    first_name: str = ""
+    last_name: str = ""
+    email: str = ""
     move_in: str | None = None
     beds: int | None = None
 

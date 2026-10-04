@@ -545,9 +545,9 @@ async def on_apply(ctx: Context, sender: str, req: ApplyRequest):
     from homie import apply
 
     building = BUILDINGS.get(req.building_id, {"name": req.building_id})
-    if not apply.available() or not req.url:
+    if not apply.available() or not req.url or not req.email:
         await ctx.send(sender, ApplyResult(request_id=req.request_id, error="no browser agent or application link"))
         return
     await hub.log_event(f"🖥️ Papers is opening {building['name']}'s application: {req.url[:80]}")
-    out = await apply.start(building, req.url, req.move_in or "", req.beds)
+    out = await apply.start(building, req.url, req.move_in or "", req.beds, req.first_name, req.last_name, req.email)
     await ctx.send(sender, ApplyResult(request_id=req.request_id, share_url=out.get("share_url", ""), run_id=out.get("run_id", ""), error=out.get("error", "")))

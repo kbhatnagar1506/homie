@@ -15,9 +15,8 @@ from homie.config import env
 log = logging.getLogger("homie.apply")
 API = "https://api.browser-use.com/api/v4"
 
-TASK = """You are helping a renter start their rental application at {name}.
-Go to {url}. If that page isn't the application or resident portal sign-up, find the "Apply" / "Apply Now" /
-"Create account" / "Resident portal" entry for this property and open it.
+TASK = """Work fast: no exploring, no screenshots of other pages. Start a rental application at {name}.
+Go to {url}. If that page isn't the application / account sign-up form, click the property's "Apply" or "Apply Now" entry once.
 
 Fill in only these details, where the form asks for them:
 - First name: {first}
@@ -38,14 +37,14 @@ def available() -> bool:
     return bool(env("BROWSER_USE_API_KEY"))
 
 
-async def start(building: dict, url: str, move_in: str, beds: int | None) -> dict:
-    """Start the run and a public live view. Returns {"share_url", "run_id"} or {"error"}."""
-    first, _, last = env("APPLICANT_NAME", "Krishna Bhatnagar").partition(" ")
-    task = TASK.format(name=building["name"], url=url, first=first, last=last or "-", email=env("APPLICANT_EMAIL", "krishna@vfcloans.com"),
+async def start(building: dict, url: str, move_in: str, beds: int | None, first: str, last: str, email: str) -> dict:
+    """Start the run and a public live view, with the renter's own details. Returns {"share_url", "run_id"} or {"error"}."""
+    task = TASK.format(name=building["name"], url=url, first=first, last=last or "-", email=email,
                        move_in=move_in or "August 20", beds=1 if beds is None else beds)
     headers = {"X-Browser-Use-API-Key": env("BROWSER_USE_API_KEY")}
     async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(f"{API}/runs", headers=headers, json={"task": task, "maxCostUsd": float(env("APPLY_MAX_USD", "2"))})
+        r = await client.post(f"{API}/runs", headers=headers, json={"task": task, "model": env("APPLY_MODEL", "gemini-3.6-flash"),
+                                                                   "maxCostUsd": float(env("APPLY_MAX_USD", "2"))})
         if r.status_code >= 300:
             return {"error": r.text[:200]}
         run = r.json()
