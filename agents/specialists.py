@@ -22,7 +22,7 @@ from homie.screenshots import read_listing, screenshot
 from homie.rpc import ask, resolve
 from homie.scope import CURRENT_USER
 from homie.buildings import BUILDINGS, can_call_now, listing_url
-from homie.config import PUBLIC_URL, ROOT, env, seed
+from homie.config import PUBLIC_METADATA, PUBLIC_URL, ROOT, env, seed
 from homie.models import (
     CallRequest,
     CallResult,
@@ -71,6 +71,7 @@ def specialist(role: str, description: str, concurrent: bool = True) -> Agent:
         name=f"homie-{role}", seed=seed(role), mailbox=MAILBOX, handle_messages_concurrently=concurrent,
         description=description, readme_path=str(ROOT / "docs" / "agents" / f"{role}.md"),
         avatar_url=f"{PUBLIC_URL}/avatars/{AVATARS[role]}.png",
+        metadata=dict(PUBLIC_METADATA),
     )
 
 

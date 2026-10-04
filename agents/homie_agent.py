@@ -29,7 +29,7 @@ from uagents_core.contrib.protocols.payment import (
 from agents.specialists import caller, later, memory, scout, vibecheck, negotiator, paperwork, pictures, policy, repairs
 from homie import hub_client as hub
 from homie import mapi
-from homie.config import PUBLIC_URL, ROOT, env, seed
+from homie.config import PUBLIC_METADATA, PUBLIC_URL, ROOT, env, seed
 from homie.buildings import BUILDINGS, can_call_now, use
 from homie.schedule import TZ, human, next_open
 from homie.llm import complete_json, _beds, parse_intent
@@ -78,6 +78,7 @@ homie = Agent(
     ),
     readme_path=str(ROOT / "docs" / "agentverse_readme.md"),
     avatar_url=f"{PUBLIC_URL}/avatars/homie.png",
+    metadata=dict(PUBLIC_METADATA),
 )
 
 chat = Protocol(spec=chat_protocol_spec)

@@ -14,7 +14,7 @@ from uagents_core.registration import RegistrationRequest
 
 from agents.homie_agent import homie
 from agents.specialists import caller, later, negotiator, scout, vibecheck, memory, paperwork, pictures, policy, repairs
-from homie.config import env
+from homie.config import PUBLIC_METADATA, env
 
 
 async def main() -> None:
@@ -25,7 +25,7 @@ async def main() -> None:
         details = RegistrationRequest(
             address=agent.address, name=agent.name, handle=agent._handle, url=None,
             profile=agent._build_registration_profile(), endpoints=agent._endpoints,
-            protocols=list(agent.protocols.keys()), metadata=agent.metadata,
+            protocols=list(agent.protocols.keys()), metadata={**(agent.metadata if isinstance(agent.metadata, dict) else {}), **PUBLIC_METADATA},
         )
         result = await register_in_agentverse(
             AgentverseConnectRequest(user_token=key, agent_type="mailbox"),

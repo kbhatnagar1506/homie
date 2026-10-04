@@ -43,3 +43,8 @@ def load_buildings() -> list[dict]:
         b["phone"] = env(f"PHONE_{b['id'].upper()}")
         b["relay_handle"] = env(f"RELAY_OFFICE_{b['id'].upper()}")  # a teammate's Relay handle playing this office
     return buildings
+
+
+# Every Homie agent is public on Agentverse and discoverable from ASI:One.
+PUBLIC_METADATA = {"is_public": "True", "categories": ["housing", "real-estate", "students"],
+                   "tags": ["apartment", "rent", "international-student", "no-ssn", "leasing", "innovationlab", "hackathon"]}
