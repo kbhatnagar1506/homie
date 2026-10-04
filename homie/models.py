@@ -67,3 +67,14 @@ class RepairResult(Model):
     slot: str | None
     channel: str  # "call" | "email"
     note: str
+
+
+class PolicyRequest(Model):
+    request_id: str = ""
+    question: str
+    building_id: str | None = None
+
+
+class PolicyResult(Model):
+    request_id: str = ""
+    answer: str

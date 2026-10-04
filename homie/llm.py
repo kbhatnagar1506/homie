@@ -29,8 +29,22 @@ async def complete_json(system: str, user: str) -> dict | None:
         return None
 
 
-INTENT_PROMPT = """Extract an apartment search request into JSON with keys:
-intent ("search" | "repair" | "status" | "other"), city, move_in (string), beds (int),
+async def complete_text(system: str, messages: list[dict], fallback: str = "") -> str:
+    if not _client:
+        return fallback
+    try:
+        r = await _client.chat.completions.create(
+            model=LLM_MODEL, messages=[{"role": "system", "content": system}, *messages], temperature=0.6,
+        )
+        return (r.choices[0].message.content or "").strip() or fallback
+    except Exception as e:
+        log.warning("LLM call failed: %s", e)
+        return fallback
+
+
+INTENT_PROMPT = """Extract an apartment request into JSON with keys:
+intent ("search" | "repair" | "policy" | "status" | "other"; "policy" means a question about a lease, deposit,
+tenant rights, landlord rules or the law), city, move_in (string), beds (int),
 max_rent (int), no_ssn (bool), require_free_month (bool), fee_cap (int), issue (string, repairs only).
 Use null for anything not stated. Reply with JSON only."""
 
@@ -45,8 +59,10 @@ def fallback_intent(text: str) -> dict:
     money = [int(m.replace(",", "")) for m in re.findall(r"\$?\b(\d{1,2},?\d{3})\b", t)]
     fee = re.search(r"\$?(\d{2,4})\s*(?:on|in)?\s*fees", t)
     repair = any(w in t for w in ("broken", "repair", "fix", "leak", "not working", "ice maker"))
+    policy = any(w in t for w in ("rights", "deposit", "evict", "legal", "allowed to", "can my landlord", "clause", "policy", "law"))
+    search = any(w in t for w in ("apartment", "bedroom", "move", "rent", "lease"))
     return {
-        "intent": "repair" if repair else ("search" if any(w in t for w in ("apartment", "bedroom", "move", "rent", "lease")) else "other"),
+        "intent": "repair" if repair else ("policy" if policy else ("search" if search else "other")),
         "city": "Ann Arbor" if "ann arbor" in t else None,
         "move_in": (re.search(r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\.?\s+\d{1,2}", t) or [None])[0],
         "beds": 2 if "two-bed" in t or "2 bed" in t else 1,

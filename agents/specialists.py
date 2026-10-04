@@ -11,6 +11,8 @@ from uagents import Agent, Context
 
 from homie import hub_client as hub
 from homie.calls import place_call
+from homie.events import team_post
+from homie.llm import complete_text
 from homie.rpc import ask, resolve
 from homie.config import load_buildings, seed
 from homie.models import (
@@ -18,6 +20,8 @@ from homie.models import (
     CallResult,
     NegotiateRequest,
     NegotiateResult,
+    PolicyRequest,
+    PolicyResult,
     PaperworkRequest,
     PaperworkResult,
     RepairRequest,
@@ -30,6 +34,7 @@ caller = Agent(name="homie-caller", seed=seed("caller"), handle_messages_concurr
 negotiator = Agent(name="homie-negotiator", seed=seed("negotiator"), handle_messages_concurrently=True)
 paperwork = Agent(name="homie-paperwork", seed=seed("paperwork"))
 repairs = Agent(name="homie-repairs", seed=seed("repairs"), handle_messages_concurrently=True)
+policy = Agent(name="homie-policy", seed=seed("policy"), handle_messages_concurrently=True)
 
 CALL_TIMEOUT = 300
 
@@ -46,7 +51,10 @@ async def on_call(ctx: Context, sender: str, req: CallRequest):
         fields = {k: result.get(k) for k in ("price", "discount", "fees", "ssn_alternative", "payment") if result.get(k) is not None}
         status = "matched" if result.get("matched") else ("answered" if result.get("answered") else "no answer")
         await hub.offer(req.building_id, status=status, **fields)
-    await hub.log_event(result.get("summary") or f"{building['name']}: {'answered' if result.get('answered') else 'no answer'}")
+    summary = result.get("summary") or f"{building['name']}: {'answered' if result.get('answered') else 'no answer'}"
+    await hub.log_event(summary)
+    if req.purpose != "repair":
+        team_post("calls", summary + (f" No SSN: {result['ssn_alternative']}." if result.get("ssn_alternative") else ""))
     await ctx.send(
         sender,
         CallResult(
@@ -79,6 +87,9 @@ async def on_negotiate(ctx: Context, sender: str, req: NegotiateRequest):
     leverage = next((o for o in offers if _has_free_month(o)), None)
     targets = [o for o in offers if o is not leverage][:2]
     await hub.step("negotiate", "active", "Calling the best two back")
+    if leverage:
+        team_post("calls", f"Using {BUILDINGS[leverage['building_id']]['name']}'s offer ({leverage.get('discount')}) as leverage. "
+                           f"Calling {', '.join(BUILDINGS[t['building_id']]['name'] for t in targets)} back to ask them to match.")
 
     async def push(target: dict):
         context = {
@@ -120,6 +131,8 @@ async def on_paperwork(ctx: Context, sender: str, req: PaperworkRequest):
     else:
         plan = f"Pay through: {req.payment or 'the online portal'}."
     await hub.step("paperwork", "done", "No SSN: " + ", ".join(docs))
+    team_post("papers", f"{BUILDINGS[req.building_id]['name']} accepts instead of an SSN: {', '.join(docs)}. "
+                        f"Application prepared and the unit is on hold. {plan}")
     await hub.post("/api/application", {"building_id": req.building_id, "documents": docs, "status": "HELD"})
     await ctx.send(sender, PaperworkResult(request_id=req.request_id, documents=docs, payment_plan=plan, application_status="HELD"))
 
@@ -136,15 +149,39 @@ async def on_repair(ctx: Context, sender: str, req: RepairRequest):
                                       context={"issue": req.issue, "unit": "4B", "ticket_id": ticket_id, "attempt": attempt}),
                           CALL_TIMEOUT)
         if isinstance(reply, CallResult) and reply.answered:
+            team_post("fix", f"Ticket {ticket_id}: called {BUILDINGS[req.building_id]['name']} about '{req.issue}'. Booked for {reply.repair_slot}.")
             await hub.post("/api/repairs/update", {"ticket_id": ticket_id, "slot": reply.repair_slot, "status": "booked"})
             await ctx.send(sender, RepairResult(request_id=req.request_id, ticket_id=ticket_id, slot=reply.repair_slot, channel="call",
                                                 note=f"Repair booked: {reply.repair_slot}"))
             return
         await hub.log_event(f"No answer on repair call (attempt {attempt}), retrying")
+        team_post("fix", f"No answer from the office on try {attempt} for ticket {ticket_id}. Trying again.")
     await hub.post("/api/repairs/update", {"ticket_id": ticket_id, "status": "emailed"})
     await hub.log_event("No answer twice: emailed the office with the photo and ticket")
+    team_post("fix", f"Nobody picked up twice, so I emailed the office about ticket {ticket_id} with the photo. I'll keep chasing.")
     await ctx.send(sender, RepairResult(request_id=req.request_id, ticket_id=ticket_id, slot=None, channel="email",
                                         note="Nobody picked up twice, so I emailed the office with the photo. I'll keep chasing."))
+
+
+# ---------- Policy ----------
+
+POLICY_PROMPT = (
+    "You are Homie Policy, a renter's-rights explainer for students in Ann Arbor, Michigan. Answer in plain English in "
+    "under 120 words. Cover what Michigan law and Ann Arbor city rules generally say (security deposits are capped at "
+    "1.5 months' rent and must be returned with an itemized list within 30 days of move-out; landlords must give a move-in "
+    "checklist; Ann Arbor regulates when landlords can show units and start re-leasing), what to check in the lease, and "
+    "one next step. Say you're not a lawyer and point to the Michigan Legal Help site or the university's student legal "
+    "services for anything serious."
+)
+
+
+@policy.on_message(PolicyRequest, replies=PolicyResult)
+async def on_policy(ctx: Context, sender: str, req: PolicyRequest):
+    building = BUILDINGS.get(req.building_id or "", {}).get("name")
+    answer = await complete_text(POLICY_PROMPT, [{"role": "user", "content": req.question + (f" (Building: {building})" if building else "")}],
+                                 fallback="I couldn't reach my legal notes just now. For anything urgent, Michigan Legal Help (michiganlegalhelp.org) is free.")
+    await hub.log_event("Policy question answered")
+    await ctx.send(sender, PolicyResult(request_id=req.request_id, answer=answer))
 
 
 @negotiator.on_message(CallResult)

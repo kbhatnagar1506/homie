@@ -17,7 +17,7 @@ from uagents_core.contrib.protocols.chat import ChatAcknowledgement, ChatMessage
 os.environ["HOMIE_MAILBOX"] = "0"  # local rehearsal: no Agentverse connection needed
 
 from agents.homie_agent import homie  # noqa: E402
-from agents.specialists import caller, negotiator, paperwork, repairs
+from agents.specialists import caller, negotiator, paperwork, policy, repairs
 
 DEMO = ("I move to Ann Arbor on Aug 20. One-bedroom under $1,400. No SSN. "
         "Book it if there's a month free. Spend at most $300 on fees.")
@@ -38,6 +38,10 @@ async def reply(ctx: Context, sender: str, msg: ChatMessage):
     for c in msg.content:
         if isinstance(c, TextContent):
             print(f"\nHOMIE > {c.text}\n", flush=True)
+            if c.text.rstrip().endswith("Approve?"):
+                print("STUDENT > Approve\n", flush=True)
+                await ctx.send(sender, ChatMessage(timestamp=datetime.now(timezone.utc), msg_id=uuid4(),
+                                                   content=[TextContent(type="text", text="Approve")]))
 
 
 @student.on_message(ChatAcknowledgement)
@@ -46,4 +50,4 @@ async def ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
 
 
 if __name__ == "__main__":
-    Bureau(agents=[homie, caller, negotiator, paperwork, repairs, student], port=8001).run()
+    Bureau(agents=[homie, caller, negotiator, paperwork, repairs, policy, student], port=8001).run()

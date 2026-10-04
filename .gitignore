@@ -9,3 +9,5 @@ data/state.json
 .DS_Store
 node_modules/
 agent*_data.json
+data/memory.json
+data/relay_state.json

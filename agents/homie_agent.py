@@ -25,7 +25,7 @@ from uagents_core.contrib.protocols.payment import (
     payment_protocol_spec,
 )
 
-from agents.specialists import BUILDINGS, caller, negotiator, paperwork, repairs
+from agents.specialists import BUILDINGS, caller, negotiator, paperwork, policy, repairs
 from homie import hub_client as hub
 from homie.config import ROOT, env, seed
 from homie.llm import parse_intent
@@ -37,6 +37,8 @@ from homie.models import (
     NegotiateResult,
     PaperworkRequest,
     PaperworkResult,
+    PolicyRequest,
+    PolicyResult,
     RepairRequest,
     RepairResult,
 )
@@ -58,6 +60,9 @@ chat = Protocol(spec=chat_protocol_spec)
 payments = Protocol(spec=payment_protocol_spec, role="seller")
 
 CALL_TIMEOUT = 300
+APPROVAL_TIMEOUT = 120
+approvals: dict[str, asyncio.Future] = {}
+YES = ("approve", "yes", "yep", "yeah", "do it", "ok", "okay", "sure", "go", "book")
 STEPS = ["find", "offers", "negotiate", "paperwork", "held", "keys"]
 
 
@@ -75,10 +80,16 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
     if not text:
         return
     ctx.logger.info(f"{sender}: {text}")
+    pending = approvals.get(sender)
+    if pending and not pending.done():
+        pending.set_result(text)
+        return
     intent = await parse_intent(text)
 
     if intent["intent"] == "repair":
         await handle_repair(ctx, sender, intent)
+    elif intent["intent"] == "policy":
+        await handle_policy(ctx, sender, text)
     elif intent["intent"] == "search":
         await handle_search(ctx, sender, intent)
     else:
@@ -126,7 +137,19 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
         return
     best = next(o for o in neg.offers if o["building_id"] == neg.best_building_id)
     name = BUILDINGS[best["building_id"]]["name"]
-    await say(ctx, sender, f"{name} came down to ${best['price']} with {best.get('discount')}. Holding it for you now.")
+    await say(ctx, sender, f"{name} came down to ${best['price']}/mo with {best.get('discount')}. Approve?")
+    approvals[sender] = asyncio.get_running_loop().create_future()
+    try:
+        answer = await asyncio.wait_for(approvals[sender], APPROVAL_TIMEOUT)
+    except asyncio.TimeoutError:
+        answer = "approve"  # you asked Homie to book it if the rules match, so silence means go
+    finally:
+        approvals.pop(sender, None)
+    if not answer.lower().strip().startswith(YES):
+        await hub.step("held", "blocked", "You asked to keep looking")
+        await say(ctx, sender, "Okay, not holding it. I'll keep watching for better deals and ping you.", end=True)
+        return
+    await hub.log_event("Approved by the student")
 
     # 3. Deal watcher: if the deal depends on a future discount day, wait for it.
     if best.get("discount_day") and not best.get("matched"):
@@ -162,6 +185,13 @@ async def handle_repair(ctx: Context, sender: str, req: dict) -> None:
         await say(ctx, sender, f"Ticket {result.ticket_id}. {result.note}", end=True)
     else:
         await say(ctx, sender, "The office isn't responding yet. I'll keep chasing and tell you when it's booked.", end=True)
+
+
+async def handle_policy(ctx: Context, sender: str, question: str) -> None:
+    building_id = ctx.storage.get(f"home:{sender}")
+    result = await ask(ctx, policy.address, PolicyRequest(question=question, building_id=building_id), 90)
+    answer = result.answer if isinstance(result, PolicyResult) else "My policy helper is busy. Try again in a minute."
+    await say(ctx, sender, answer, end=True)
 
 
 async def wait_for_day(day: int, timeout_s: int = 900) -> None:
@@ -211,6 +241,7 @@ async def on_reject(ctx: Context, sender: str, msg: RejectPayment):
 @homie.on_message(NegotiateResult)
 @homie.on_message(PaperworkResult)
 @homie.on_message(RepairResult)
+@homie.on_message(PolicyResult)
 async def on_specialist_reply(ctx: Context, sender: str, msg):
     resolve(msg)
 

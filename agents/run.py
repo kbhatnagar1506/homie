@@ -1,15 +1,24 @@
-"""Runs all five Homie agents in one process.
+"""Runs every Homie agent in one process.
 
     python -m agents.run
+
+Six Fetch.ai uAgents (Homie, Caller, Negotiator, Paperwork, Repairs, Policy),
+plus the Relay bridge when RELAY_TOKEN_HOMIE is set in .env.
 """
 
 from uagents import Bureau
 
 from agents.homie_agent import homie
-from agents.specialists import caller, negotiator, paperwork, repairs
+from agents.specialists import caller, negotiator, paperwork, policy, repairs
+from homie.config import env
 
 if __name__ == "__main__":
-    bureau = Bureau(agents=[homie, caller, negotiator, paperwork, repairs], port=8000)
-    for a in bureau._agents:
-        print(f"{a.name:18} {a.address}")
+    agents = [homie, caller, negotiator, paperwork, repairs, policy]
+    if env("RELAY_TOKEN_HOMIE"):
+        from agents.relay_bridge import bridge
+
+        agents.append(bridge)
+    bureau = Bureau(agents=agents, port=8000)
+    for a in agents:
+        print(f"{a.name:20} {a.address}")
     bureau.run()
