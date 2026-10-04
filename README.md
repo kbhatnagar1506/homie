@@ -1,162 +1,178 @@
 <p align="center">
-  <img src="relay_app/avatars/homie.png" width="120" alt="Homie" />
+  <img src="relay_app/avatars/homie.png" width="128" alt="Homie" />
 </p>
 
 <h1 align="center">Homie</h1>
+<p align="center"><b>This isn't a chatbot. It's a team.</b><br/>
+11 AI agents that find, call, negotiate and land your first US apartment, from one message, while you sleep.</p>
 
 <p align="center">
 
-![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3) ![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
+![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3) ![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1) ![Fetch.ai](https://img.shields.io/badge/Fetch.ai-11_uAgents-1A1A2E) ![ASI:One](https://img.shields.io/badge/ASI:One-@homie--usa-6AB8FF) ![Relay](https://img.shields.io/badge/Relay-video_calls-3DFFA0) ![ElevenLabs](https://img.shields.io/badge/ElevenLabs-live_calls-000000)
 
 </p>
-<p align="center"><b>An AI team that's your person in America.</b><br/>
-It finds, calls and negotiates your apartment, handles the no-SSN paperwork, chases repairs, remembers you, and picks up the work again on Monday.</p>
 
 <p align="center">
+  <a href="https://youtu.be/zl_fpA4hX9Q"><b>▶ Watch the demo</b></a> ·
   <a href="https://homie-751583582765.us-central1.run.app">Mission control</a> ·
-  <a href="https://homie-751583582765.us-central1.run.app/about">Landing</a> ·
-  <a href="https://homie-751583582765.us-central1.run.app/live?role=fix&live=1">Live video call</a> ·
-  <a href="https://asi1.ai">Talk to @homie-usa on ASI:One</a>
+  <a href="https://homie-751583582765.us-central1.run.app/flow">Hear the calls live</a> ·
+  <a href="https://asi1.ai">Chat with @homie-usa on ASI:One</a>
 </p>
 
 <p align="center">
-  <img src="relay_app/avatars/calls.png" width="52" />
-  <img src="relay_app/avatars/negotiator.png" width="52" />
-  <img src="relay_app/avatars/papers.png" width="52" />
-  <img src="relay_app/avatars/fix.png" width="52" />
-  <img src="relay_app/avatars/policy.png" width="52" />
-  <img src="relay_app/avatars/pics.png" width="52" />
-  <img src="relay_app/avatars/memory.png" width="52" />
-  <img src="relay_app/avatars/later.png" width="52" />
-  <img src="relay_app/avatars/scout.png" width="52" />
-  <img src="relay_app/avatars/vibecheck.png" width="52" />
+  <a href="https://youtu.be/zl_fpA4hX9Q"><img src="https://img.youtube.com/vi/zl_fpA4hX9Q/maxresdefault.jpg" width="720" alt="Homie demo video" /></a>
 </p>
 
 ---
 
 ## The problem
 
-If you're an international student, you rent your first US apartment from the other side of the world.
+Renting in the US assumes you're already in the US:
 
-- The leasing office is open while you sleep, and it can't call an Indian number back.
-- Discounts only show up on certain days, so you have to keep checking.
-- You have no SSN, so they want a guarantor or "other proof" and won't say what counts.
-- Rent is cashier's check only, which cost one of us a whole day.
-- Once you move in, getting the ice maker fixed means explaining it to a website bot again and again.
+- **Time zones:** leasing offices close before students abroad wake up.
+- **Phones:** offices won't call international numbers back.
+- **No SSN:** no credit check, so it's auto-reject or months of rent upfront.
+- **Moving prices:** rents change daily, and specials last only days.
+- **Locked information:** prices and rules hide in leasing portals with no API.
+- **Payments:** deposits need US cashier's checks, and foreign wires don't count.
 
 ## What Homie does
 
-Text it once, on **Relay** or **ASI:One**:
+Text it once, on **ASI:One** or **Relay**:
 
-> *"Get me a one bedroom at The Mix, jointhemix.com, Aug 20. I have no SSN."*
+> *"Find me a 1 bedroom off campus near UC Berkeley under $3,500. I have no SSN."*
 
-And the team gets to work, posting in your Relay group chat like real people with real emoji:
+| Time | The team at work (from a live run on the deployed system) |
+|---|---|
+| **0s** | **Homie** reads the request (Jev decides route, bedrooms, no-SSN and urgency in one typed call) and recalls what **Memory** knows about you. |
+| **33s** | **Scout** finds real buildings (Google Places) and reads every website for live prices, specials, hours and no-SSN rules. **Vibecheck** sends a numbered shortlist in chat, plus a swipe deck with photos. |
+| **35s** | You reply *"1 3"* in ASI:One, or swipe. Vibecheck learns your taste. |
+| **49s** | **Calls** dials every office you liked at once, with an ElevenLabs voice. You can listen to all of them live. It asks for the rent, *when the special applies*, and what they accept instead of an SSN. |
+| **121s** | **Later** books a callback for the exact day each special kicks in. |
+| **153s** | **Negotiator** plays the offers against each other. |
+| **156s** | **Homie** holds the best deal. |
+| **160–185s** | **Papers** opens the building's portal in a live browser: ✅ account → ✅ application → ✅ $50 fee *(sandbox portal in demo mode)*. |
 
-1. **Homie** reads the request (Jev decides the route, bedrooms, no-SSN, urgency in one call) and pulls what it already knows about you from memory.
-2. **Scout** reads the building's entire website: floor plans, live prices, fees, office hours, application link, and its rules for international applicants.
-3. **Vibecheck** sends a swipe link (ASI:One and Relay): every building as a card with all its screenshots, live price and special. Swipe right or left; it learns your taste.
-4. **Pics** screenshots the floor plans into the chat.
-4. **Calls** posts the live prices and specials, and phones the office if it's open. It always says it's an AI assistant calling for a student.
-5. **Papers** works out exactly what to send instead of an SSN.
-6. **Policy** flags fees and Georgia tenant law to watch.
-7. **Later** books the office call for when they open (*"today at 1:15 PM ET"*) and runs it on its own.
-8. Homie sends back one plan, ready for one yes. You pay when you get your keys.
+**After you move in:** say *"my ice maker is broken"* and **video-call Fix on Relay**. A Pixar-style figurine looks through your camera, sees the problem, files the ticket with a photo, and chases the office until it's booked.
 
-Real output from a run against The Mix (Atlanta):
+<p align="center"><img src="docs/homie_architecture.png" width="900" alt="Homie architecture" /></p>
 
-```
-Here's the plan for The Mix Apartments: A1 at $1735/mo.
-No SSN: Passport, Guarantor service (e.g. TheGuarantors) instead of a US cosigner
-Heads-up: In Georgia, landlords must return your deposit within one month of move-out with an itemized list...
-Office call: today at 1:15 PM ET (Homie Later)
-Application: https://themix.prospectportal.com/atlanta/the-mix-apartments/student/
-Want me to prep the application? I'll fill in everything except your personal details, and you hit submit.
-```
+---
 
-You can also say *"find me something downtown under $2500"*. Homie searches real buildings (Google Places), calls up to 10 at once, uses the best offer as leverage to negotiate the top two, and asks for your approval before holding anything. If nobody picks up, it reads prices off their websites, locks in the best one as the price to beat, and Later calls everyone back Monday.
-
-After you move in: *"my ice maker is broken"*. Start a **video call** with Fix. It looks through your camera ("I'm looking at it..."), files the maintenance request with what it saw, and chases the office until it's fixed.
-
-## The team
-
-Eleven [Fetch.ai uAgents](https://fetch.ai), each with its own address, all published on Agentverse:
+## 🤖 The team: 11 uAgents on Agentverse
 
 | | Agent | Job | Address |
 |---|---|---|---|
-| <img src="relay_app/avatars/homie.png" width="28"/> | **Homie** `@homie-usa` | Orchestrator. Chat Protocol + Payment Protocol. Plans, delegates, reports back. | `agent1qwcg6lkqt9pmll49h0qe3zy3ajlqy08qemrqe48k5nwknt7h6kyhyvs9rps` |
-| <img src="relay_app/avatars/calls.png" width="28"/> | **Calls** | Phones leasing offices in parallel (Pipecat + Gemini Live + Twilio). | `agent1qfmq6lcrjag58fxxqq8gpmjkkl948p8998m8lr08sgmtepc6k5k4utdcztj` |
-| <img src="relay_app/avatars/negotiator.png" width="28"/> | **Negotiator** | Scores offers, uses the best as leverage, calls the top two back. | `agent1qvyy8jffzqwz5mrldg5gmfk9xqr4qamny6hpmdnkqjjefzmwx3xkwhy6klg` |
-| <img src="relay_app/avatars/papers.png" width="28"/> | **Papers** | No-SSN document lists, application prep, cashier's check plans. | `agent1qw3ft6ycanku4spz9ng8jj56upzmmqhzlspdrd5wnemnz35phsm7zqsl9m9` |
-| <img src="relay_app/avatars/fix.png" width="28"/> | **Fix** | Repairs: triage, tickets with photos, chasing the office. | `agent1qwa6jlt60t3rqz2lr8rv2cj5e09u9lwtxp0zntc835g8hj3mfugl2zk7sz8` |
-| <img src="relay_app/avatars/policy.png" width="28"/> | **Policy** | Leases, deposits, fees, Georgia tenant law. | `agent1qfr7q89z8hrkf8yh046ghxu0uk4m3pkmqaz3ngaznsqtt2qdyxr7ywygrv4` |
-| <img src="relay_app/avatars/pics.png" width="28"/> | **Pics** | Screenshots listings, reads live prices off websites. | `agent1q077xn0rftvwdpx54qzqfce8v3u2e60ldl2wtfvfsckg6tyzt9hy240l06s` |
-| <img src="relay_app/avatars/memory.png" width="28"/> | **Memory** | Remembers you and everything the team did, per user (Mapi). | `agent1qff0lvefgk3etwvjp7h4a08725cc3yz0ftd0lrdf7p9kxw9zpa7v5nfsq80` |
-| <img src="relay_app/avatars/later.png" width="28"/> | **Later** | The waiting agent. Schedules future work and runs it on time. | `agent1qdj7s537sarkkw0lcqpat5n6st5hmwyr4zqq0wqa6ac4drwsh2wyq3wlzvs` |
-| <img src="relay_app/avatars/scout.png" width="28"/> | **Scout** | Reads a building's whole website into structured facts. | `agent1q0hk8gqpa5wvd8mcafyvdhppr9r8ae9jw3dss5swmd3afpspgse9utwv3sa` |
-| <img src="relay_app/avatars/vibecheck.png" width="28"/> | **Vibecheck** | Swipe cards (left/right) from Scout's findings; learns your taste and shortlists. | `agent1qw997gd5awven0egprca6r62g04shle0vugpd467358jstvan6mfze37sha` |
+| <img src="relay_app/avatars/homie.png" width="28"/> | **Homie** `@homie-usa` | Orchestrator. Chat Protocol + Payment Protocol | `agent1qwcg6lkqt9pmll49h0qe3zy3ajlqy08qemrqe48k5nwknt7h6kyhyvs9rps` |
+| <img src="relay_app/avatars/scout.png" width="28"/> | **Scout** | Reads every building's site into structured facts | `agent1q0hk8gqpa5wvd8mcafyvdhppr9r8ae9jw3dss5swmd3afpspgse9utwv3sa` |
+| <img src="relay_app/avatars/vibecheck.png" width="28"/> | **Vibecheck** | Shortlist and swipe deck; learns your taste | `agent1qw997gd5awven0egprca6r62g04shle0vugpd467358jstvan6mfze37sha` |
+| <img src="relay_app/avatars/calls.png" width="28"/> | **Calls** | Parallel calls with a real-time ElevenLabs voice | `agent1qfmq6lcrjag58fxxqq8gpmjkkl948p8998m8lr08sgmtepc6k5k4utdcztj` |
+| <img src="relay_app/avatars/later.png" width="28"/> | **Later** | Waits, then runs future tasks on time | `agent1qdj7s537sarkkw0lcqpat5n6st5hmwyr4zqq0wqa6ac4drwsh2wyq3wlzvs` |
+| <img src="relay_app/avatars/negotiator.png" width="28"/> | **Negotiator** | Scores offers, uses the best as leverage | `agent1qvyy8jffzqwz5mrldg5gmfk9xqr4qamny6hpmdnkqjjefzmwx3xkwhy6klg` |
+| <img src="relay_app/avatars/papers.png" width="28"/> | **Papers** | No-SSN checklist; the application in a live browser | `agent1qw3ft6ycanku4spz9ng8jj56upzmmqhzlspdrd5wnemnz35phsm7zqsl9m9` |
+| <img src="relay_app/avatars/policy.png" width="28"/> | **Policy** | Leases, deposits, tenant law | `agent1qfr7q89z8hrkf8yh046ghxu0uk4m3pkmqaz3ngaznsqtt2qdyxr7ywygrv4` |
+| <img src="relay_app/avatars/pics.png" width="28"/> | **Pics** | Screenshots listings, reads live prices | `agent1q077xn0rftvwdpx54qzqfce8v3u2e60ldl2wtfvfsckg6tyzt9hy240l06s` |
+| <img src="relay_app/avatars/memory.png" width="28"/> | **Memory** | Per-user memory every agent reads (Mapi) | `agent1qff0lvefgk3etwvjp7h4a08725cc3yz0ftd0lrdf7p9kxw9zpa7v5nfsq80` |
+| <img src="relay_app/avatars/fix.png" width="28"/> | **Fix** | Repairs via video call with camera vision | `agent1qwa6jlt60t3rqz2lr8rv2cj5e09u9lwtxp0zntc835g8hj3mfugl2zk7sz8` |
 
-Scout exists because of a rule we gave the team: **when it can't find something, make an agent for it.** Homie couldn't get prices for one specific building, so Scout was born.
+Agentverse profiles live at `https://agentverse.ai/agents/details/<address>/profile`.
 
-## Architecture
+---
 
-```
-  Relay app (group chat, DMs,          ASI:One
-  video calls, payment cards)            │  Chat + Payment Protocol
-            │                            ▼
-            └────── Relay bridge ─────▶ Homie ◀──── Jev (System One): every decision,
-                                        │  │        typed, with a confidence gate
-             ┌──────────┬──────────┬────┴──┴───┬──────────┬──────────┬─────────┐
-             ▼          ▼          ▼           ▼          ▼          ▼         ▼
-           Calls   Negotiator   Papers        Fix      Policy      Pics     Scout
-             │                                                                 │
-     Twilio / Gemini Live                                         Playwright + Gemini
-             │
-         Later (waiting agent) ── wakes up ──▶ Homie        Memory (Mapi), per user
-                                        │
-                          Hub (FastAPI): mission control, SSE, live call, Twilio stream
-```
+## 🧠 How it works
 
-- **Orchestration.** Homie is the only agent the student talks to. Specialists talk to each other through a request-id RPC (`homie/rpc.py`), so many requests can be in flight at once without the session collisions of `send_and_receive`.
-- **Jev as the brain stem.** Every decision is a typed Jev question (Choice, Noul, Score), fanned out in one call: route, bedrooms, no-SSN, approvals, which teammate answers in the group, offer scoring, call outcomes, repair emergencies, avatar emotion, task kind. Homie acts only above a confidence gate, and Gemini writes every word. Jev never appears as an agent: its decisions show up as "Homie decided".
-- **Gemini on Vertex** for everything else: `gemini-2.5-flash` for writing, flash-lite for calls and vision, `gemini-2.5-flash-image` for the avatars, **Veo 3** for the video-call figurine's talking and listening loops.
-- **Memory.** Every agent reads from and writes to Mapi, scoped per user, before it says anything.
-- **Payments.** Fetch Payment Protocol (FET, verified on-chain), plus a Relay Stripe card at key handoff. Nothing is charged until you get your keys.
+### Fetch.ai
+- **Every agent is a uAgent with its own address,** registered as a mailbox agent on **Agentverse** (`scripts/agentverse_publish.py`).
+- **Homie speaks the Agent Chat Protocol,** so the whole flow runs inside one **ASI:One** conversation.
+- **Payment Protocol:** Homie is a seller. When you get your keys, it sends `RequestPayment` for its fee in FET and verifies the transaction on-chain before sending `CompletePayment`.
+- **Request-id RPC** (`homie/rpc.py`) replaces `send_and_receive`, so dozens of agent-to-agent requests can be in flight at once without session collisions.
+- **Later is a long-running agent.** Its tasks live in agent storage, survive restarts, and fire on time.
 
-## Live calls you can hear
+### Relay
+- **Seven agents are real Relay contacts,** plus a **Homie Team** group chat where they talk to you and to each other (`relay_app/runtime.py`).
+- **Rich cards** for the swipe deck, Approve, the live application and live calls.
+- **📹 Video calls:**
+  - A Veo-animated figurine answers with ElevenLabs speech-to-text, Gemini Flash-Lite with tools, and ElevenLabs voice, streamed through Pipecat (`homie/avatar_call.py`).
+  - It reads your camera with Gemini vision and files the maintenance ticket itself.
+  - Browser version: `/live`.
 
-Calls run on an ElevenLabs Agent bridged from Twilio in `ulaw_8000` with no transcoding: about 1s from the office going quiet to Homie answering. Open `/flow` for a dark wireframe of the whole team, a live console of every agent message and dial, and **Hear all calls** to listen to every live call at once, panned in stereo. Even on a Sunday Homie decides: it ranks the buildings you liked on Scout's live prices, and Later calls them the moment they open.
+### Live calls you can hear
+- **Each call runs on an ElevenLabs Agent,** bridged from Twilio media streams in **μ-law 8 kHz with zero transcoding** (`homie/phone.py`). Replies come back in about 1 second.
+- **The bridge taps both sides of the call.** `/flow` plays any call live, or **all of them at once, panned in stereo**.
+- **The agent always says it's an AI assistant calling for a student.**
 
-## Video calls
+### Decisions with Jev, words with Gemini
+- **Every decision is a typed Jev question** (`Choice`, `Noul`, `Score`), fanned out in one call and acted on only above a confidence gate (`homie/jev.py`).
+- **Gemini 2.5 on Vertex writes every message.**
 
-Call any agent on Relay and a Pixar-style figurine answers. Pipecat runs ElevenLabs STT, Gemini flash-lite with tools (`look_at_problem`, `file_maintenance_request`), and ElevenLabs TTS. The figurine swaps between seamless Veo loops for talking and listening. It sees your camera, so you can point it at the broken thing. There's a browser version too: `/live`, running on ElevenLabs Agents.
+### Live applications with Browser Use
+- **Papers drives a Browser Use Cloud browser,** embedded live in mission control (`homie/apply.py`).
+- **On real portals,** it fills your details and stops before the password and submit.
+- **In demo mode,** it runs account → application → fee on the built-in sandbox portal (`/portal`).
 
-## Mission control
+---
 
-`/` shows the whole team working live: the agent network, a talk show where agents speak to each other in turn, the buildings board, steps, the "Up next" queue from Later, and per-user history. `/about` is the three.js landing page.
+## 🚀 Run it
 
-## Run it
+**Requirements:**
+- Python 3.13 and a Google Cloud project with Vertex AI and the Places API (New) enabled.
+- An Agentverse API key, and Relay agent tokens.
+- Optional: Twilio, ElevenLabs, Browser Use, Jev (TypeSafe) and Mapi keys. Every one has a fallback.
 
 ```bash
+git clone https://github.com/kbhatnagar1506/homie && cd homie
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/playwright install chromium
-cp .env.example .env                                  # seeds, Relay, Vertex, Mapi, Jev, ElevenLabs
-.venv/bin/uvicorn hub.server:app --port 8080          # mission control
-.venv/bin/python -m agents.run                        # all 10 agents + the Relay team
+cp .env.example .env                      # fill in seeds and keys; every variable is documented there
 ```
 
-Try it without Relay or ASI:One:
+Run the hub, then all 11 agents plus the Relay team:
 
 ```bash
-.venv/bin/python -m scripts.simulate "get me a one bedroom at The Mix https://www.jointhemix.com/ for Aug 20, I have no SSN"
-.venv/bin/python -m scripts.e2e        # every scenario, the phone stream, and the team voice
-.venv/bin/python -m scripts.selftest
+.venv/bin/uvicorn hub.server:app --port 8080
+.venv/bin/python -m agents.run
 ```
 
-Deploy: a single Cloud Run container (`Dockerfile`) runs the hub and every agent. Use one instance with CPU always on, since the agents hold websockets and timers.
+Open http://localhost:8080 (mission control) and http://localhost:8080/flow (live wireframe and calls).
 
-## Honest notes
+### Test it without ASI:One or Relay
 
-- Homie always says it's an AI assistant on calls. It never submits an application, enters your personal details, or pays without your explicit yes.
-- Real phone calls need a Twilio number. Without one, Homie says no line is connected and Later books the call, and simulated runs are labeled as simulated.
+```bash
+# the full flow, end to end, with demo calls and cached cities (Berkeley, SF, Stanford, Atlanta, Georgia Tech, UMich)
+DEMO_MODE=1 MOCK_CALLS=1 AUTO_APPROVE=1 .venv/bin/python -m scripts.simulate "find me a 1 bedroom near UC Berkeley under 3500, no SSN"
 
-Built at MHacks 2026.
+# pick buildings by chat reply instead of swiping
+SIM_CHAT_PICKS="1 3" DEMO_MODE=1 MOCK_CALLS=1 .venv/bin/python -m scripts.simulate "find me a studio in San Francisco under 4000"
+
+.venv/bin/python -m scripts.selftest      # Places, Gemini, Mapi, website reading
+.venv/bin/python -m scripts.e2e           # every scenario + the phone stream + Relay voice
+.venv/bin/python -m scripts.prewarm       # refresh the demo cache
+```
+
+### Publish and deploy
+
+```bash
+.venv/bin/python -m scripts.agentverse_publish     # register all 11 agents on Agentverse
+gcloud run deploy homie --source . --region us-central1 --cpu 4 --memory 4Gi --concurrency 1000
+```
+
+One Cloud Run container runs the hub and every agent. Use one instance, with CPU always on, because the agents hold websockets and timers.
+
+---
+
+## 🧰 Built with
+
+Fetch.ai uAgents · Agentverse · ASI:One · Chat Protocol · Payment Protocol · Relay · ElevenLabs (Agents, TTS, STT, SFX) · Twilio · Gemini 2.5 & Veo 3 on Vertex AI · Jev (TypeSafe) · Browser Use Cloud · Pipecat · Playwright · Google Places · Mapi · FastAPI · Cloud Run · Notability
+
+## 📁 Repo map
+
+| Path | What's there |
+|---|---|
+| `agents/` | Homie (`homie_agent.py`) and the 10 specialists (`specialists.py`) |
+| `homie/` | RPC, calls and the phone bridge, Scout crawler, Jev decisions, Browser Use apply, cache, memory |
+| `relay_app/` | Relay team runtime, personas and avatars |
+| `hub/` | FastAPI hub: mission control, `/flow`, `/vibe`, `/portal`, `/live`, Twilio streams |
+| `scripts/` | simulate, e2e, selftest, prewarm, publish, record and edit demo videos |
+| `docs/` | Agent readmes for Agentverse, the architecture graphic, the Devpost write-up |
+
+<p align="center"><br/><b>Built at MHacks 2026.</b> One text. Eleven agents. You wake up with an apartment. 🏠</p>
