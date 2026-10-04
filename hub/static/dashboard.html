@@ -113,7 +113,7 @@
 </header>
 <main>
   <section class="panel">
-    <h2>Agents <span class="count" id="agentcount">8 Fetch.ai agents</span></h2>
+    <h2>Agents <span class="count" id="agentcount">8 Fetch.ai agents · Jev orchestrating</span></h2>
     <svg id="net" viewBox="0 0 400 400"></svg>
     <div class="request"><div class="who" id="reqwho">Waiting for a request</div><div id="req">Text Homie on Relay or ask @homie-usa on ASI:One.</div></div>
     <div class="steps" id="steps"></div>
@@ -133,11 +133,11 @@
 </main>
 <script>
 const AGENTS = [
-  ["homie", "Homie", "homie"], ["homie-caller", "Calls", "calls"], ["homie-negotiator", "Negotiator", "negotiator"],
+  ["homie", "Homie", "homie"], ["jev", "Jev", "jev"], ["homie-caller", "Calls", "calls"], ["homie-negotiator", "Negotiator", "negotiator"],
   ["homie-paperwork", "Papers", "papers"], ["homie-repairs", "Fix", "fix"], ["homie-policy", "Policy", "policy"],
   ["homie-pictures", "Pics", "pics"], ["homie-memory", "Memory", "memory"],
 ];
-const COLORS = { homie:"var(--homie)", calls:"var(--calls)", negotiator:"var(--negotiator)", papers:"var(--papers)", fix:"var(--fix)", policy:"var(--policy)", pics:"var(--pics)", memory:"var(--memory)" };
+const COLORS = { jev:"#c9a7ff", homie:"var(--homie)", calls:"var(--calls)", negotiator:"var(--negotiator)", papers:"var(--papers)", fix:"var(--fix)", policy:"var(--policy)", pics:"var(--pics)", memory:"var(--memory)" };
 const STEPS = [["find","Find"],["offers","Offers"],["negotiate","Negotiate"],["paperwork","Papers"],["held","Hold"],["keys","Keys"]];
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -154,13 +154,15 @@ setInterval(tick, 1000); tick();
 // --- agent network
 const svg = $("net"), NS = "http://www.w3.org/2000/svg", pos = {};
 (function drawNet() {
-  const cx = 200, cy = 200, r = 145;
-  pos["homie"] = [cx, cy];
-  AGENTS.slice(1).forEach(([id], i) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 7; pos[id] = [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
-  let html = "";
-  AGENTS.slice(1).forEach(([id]) => html += `<line class="edge" id="e-${id}" x1="${cx}" y1="${cy}" x2="${pos[id][0]}" y2="${pos[id][1]}"/>`);
+  const cx = 200, cy = 192, r = 132;
+  pos["homie"] = [cx, cy + 18];
+  pos["jev"] = [cx, cy - 58];
+  const ring = AGENTS.filter(a => a[0] !== "homie" && a[0] !== "jev");
+  ring.forEach(([id], i) => { const a = -Math.PI / 2 + (i + .5) * 2 * Math.PI / ring.length; pos[id] = [cx + r * Math.cos(a), cy + 18 + r * Math.sin(a)]; });
+  let html = `<line class="edge" id="e-jev" x1="${pos.homie[0]}" y1="${pos.homie[1]}" x2="${pos.jev[0]}" y2="${pos.jev[1]}" style="stroke-dasharray:3 4"/>`;
+  ring.forEach(([id]) => html += `<line class="edge" id="e-${id}" x1="${pos.homie[0]}" y1="${pos.homie[1]}" x2="${pos[id][0]}" y2="${pos[id][1]}"/>`);
   AGENTS.forEach(([id, label, k]) => {
-    const [x, y] = pos[id], s = id === "homie" ? 70 : 52;
+    const [x, y] = pos[id], s = id === "homie" ? 70 : id === "jev" ? 44 : 50;
     html += `<g class="node" id="n-${id}" style="color:${COLORS[k]}">
       <circle class="node-ring" cx="${x}" cy="${y}" r="${s / 2 + 6}" stroke="currentColor"/>
       <clipPath id="c-${id}"><rect x="${x - s / 2}" y="${y - s / 2}" width="${s}" height="${s}" rx="${s * .28}"/></clipPath>

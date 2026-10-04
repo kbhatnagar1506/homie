@@ -61,8 +61,10 @@ async def stream(websocket: WebSocket, key: str, on_line) -> None:
     messages = websocket.iter_text()
     await messages.__anext__()                              # "connected"
     start = json.loads(await messages.__anext__())["start"]  # "start": stream and call ids
+    sid, token = env("TWILIO_ACCOUNT_SID"), env("TWILIO_AUTH_TOKEN")
     serializer = TwilioFrameSerializer(stream_sid=start["streamSid"], call_sid=start["callSid"],
-                                       account_sid=env("TWILIO_ACCOUNT_SID"), auth_token=env("TWILIO_AUTH_TOKEN"))
+                                       account_sid=sid or None, auth_token=token or None,
+                                       params=TwilioFrameSerializer.InputParams(auto_hang_up=bool(sid and token)))
     transport = FastAPIWebsocketTransport(websocket, params=FastAPIWebsocketParams(
         audio_in_enabled=True, audio_out_enabled=True, add_wav_header=False, serializer=serializer))
     llm = GeminiLiveVertexLLMService(

@@ -1,5 +1,6 @@
 """Small LLM helpers. Every call has a non-LLM fallback so the demo never stalls."""
 
+import asyncio
 import json
 import logging
 import re
@@ -76,8 +77,16 @@ Use null for anything not stated. Reply with JSON only."""
 
 
 async def parse_intent(text: str) -> dict:
-    data = await complete_json(INTENT_PROMPT, text) or {}
-    return {**fallback_intent(text), **{k: v for k, v in data.items() if v is not None}}
+    """Jev makes the decisions (route, bedrooms, flags, urgency); Gemini pulls out the text and numbers it's not built for."""
+    from homie import jev
+
+    decided, extracted = await asyncio.gather(jev.read_message(text), complete_json(INTENT_PROMPT, text))
+    base = {**fallback_intent(text), **{k: v for k, v in (extracted or {}).items() if v is not None}}
+    if decided:
+        base.update({k: v for k, v in decided.items() if k in ("intent", "beds", "no_ssn", "require_free_month", "also_repair", "urgency", "_jev")})
+        if base.get("intent") == "chat":
+            base["intent"] = "other"
+    return base
 
 
 def fallback_intent(text: str) -> dict:

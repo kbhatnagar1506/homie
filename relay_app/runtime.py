@@ -230,9 +230,15 @@ class RelayTeam:
         await run_websocket(BASE_URL, env(TEAM[role].token_env), on_event=on_event, on_full_sync=on_full_sync,
                             on_error=lambda e: log.warning("%s websocket: %s", role, e))
 
-    def _target_role(self, text: str, is_group: bool, receiver: str) -> str | None:
+    async def _target_role(self, text: str, is_group: bool, receiver: str) -> str | None:
+        """In the group chat Jev picks which teammate answers; in a direct chat it's whoever you texted."""
         if not is_group:
             return receiver
+        from homie import jev
+
+        who = await jev.teammate_for(text)
+        if who and who in self.relays:
+            return who
         t = text.lower()
         for role, words in MENTIONS.items():
             if any(w in t for w in words) and role in self.relays and ("@" in t or t.startswith(words)):
@@ -261,9 +267,11 @@ class RelayTeam:
     async def _memory(self, chat_id: str, text: str) -> None:
         from homie import mapi
 
-        kind = await complete_text("Reply with exactly QUESTION if the message asks about the person or what you know, "
-                                   "otherwise REMEMBER.", [{"role": "user", "content": text}], fallback="QUESTION")
-        if "REMEMBER" in kind.upper() and "?" not in text:
+        from homie import jev
+
+        move = await jev.memory_action(text)
+        remember = move == "remember" if move else ("?" not in text)
+        if remember:
             await memory.update(self.owner, text)
             await mapi.remember(text, tags=["profile", "told-directly"], source="relay")
             reply = await self.in_voice("memory", f"Saved. I'll remember: {text}")
@@ -281,7 +289,7 @@ class RelayTeam:
         if not text:
             return
         chat_id = data["chat"]["id"]
-        role = self._target_role(text, bool(data["chat"].get("is_group")), receiver)
+        role = await self._target_role(text, bool(data["chat"].get("is_group")), receiver)
         if role != receiver:
             return  # another Homie contact answers this one
         relay = self.relays[role]

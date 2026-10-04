@@ -102,7 +102,7 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
         await say(ctx, sender, await status_line())
         return
     saved = ctx.storage.get(f"offer:{sender}") or ctx.storage.get("offer:last")  # ASI:One may reply from a new session address
-    if saved and text.lower().lstrip().startswith(YES):
+    if saved and len(text) < 200 and await means_yes(text):
         await finalize(ctx, sender, saved["best"], saved["offers"], saved["req"])
         return
     if sender in clarify:  # they're answering "how many bedrooms?"
@@ -121,6 +121,19 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
         await handle_repair(ctx, sender, intent)
     elif intent["intent"] == "policy":
         await handle_policy(ctx, sender, text)
+    elif intent["intent"] == "status":
+        await say(ctx, sender, await status_line(), end=True)
+    elif intent["intent"] == "memory":
+        mem = await ask(ctx, memory.address, MemoryRequest(question=text), 30)
+        await say(ctx, sender, (mem.answer if isinstance(mem, MemoryResult) and mem.answer else "I don't know that about you yet. Tell me and I'll remember."), end=True)
+    elif intent["intent"] == "pictures":
+        import re as _re
+
+        link = _re.search(r"https?://\S+", text)
+        pics = await ask(ctx, pictures.address, PicturesRequest(url=link.group(0) if link else None,
+                                                               building_ids=[] if link else list(BUILDINGS)[:3]), 120)
+        shots = pics.images if isinstance(pics, PicturesResult) else []
+        await say(ctx, sender, ("Screenshots:\n" + "\n".join(shots)) if shots else "Send me a listing link, or start a search first and I'll screenshot the buildings.", end=True)
     elif intent["intent"] == "search":
         intent["_text"] = text
         await fill_from_memory(ctx, intent)
@@ -134,6 +147,16 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
                   "I'm Homie, your person in America. Tell me where and when you're moving, your budget, "
                   "and whether you have an SSN, and I'll call every building for you. "
                   "Already moved in? Tell me what's broken and I'll get it fixed.", end=True)
+
+
+async def means_yes(text: str, offer: str = "the apartment Homie offered") -> bool:
+    """Jev judges the reply ("sure, but make it the cheaper one" is still a yes); keyword check if Jev is down."""
+    from homie import jev
+
+    verdict = await jev.judge_reply(text, offer)
+    if verdict:
+        return verdict == "approve"
+    return text.lower().strip().startswith(YES)
 
 
 def user_label(sender: str) -> str:
@@ -318,7 +341,7 @@ async def run_offers(ctx: Context, sender: str, req: dict, offers: list[dict]) -
         answer = "approve"  # you asked Homie to book it if the rules match, so silence means go
     finally:
         approvals.pop(sender, None)
-    if not answer.lower().strip().startswith(YES):
+    if not await means_yes(answer):
         await hub.step("held", "blocked", "You asked to keep looking")
         await say(ctx, sender, "Okay, not holding it. I'll keep watching for better deals and ping you.", end=True)
         return

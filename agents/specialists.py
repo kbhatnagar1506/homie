@@ -87,6 +87,14 @@ async def on_call(ctx: Context, sender: str, req: CallRequest):
     await hub.offer(req.building_id, status=f"calling ({req.purpose})")
     await hub.log_event(f"Calling {building['name']} to {req.purpose}")
     result = await place_call(building, req.purpose, req.context)
+    if result.get("transcript"):
+        from homie import jev
+
+        facts = await jev.call_outcome(result["transcript"])
+        if facts:
+            result.setdefault("matched", facts.get("matched", 0) >= 0.6)
+            if facts.get("reached_person", 1) < 0.4:
+                result["answered"] = False
     if req.purpose != "repair":
         fields = {k: result.get(k) for k in ("price", "discount", "fees", "ssn_alternative", "payment") if result.get(k) is not None}
         status = "matched" if result.get("matched") else ("answered" if result.get("answered") else "no answer")
@@ -143,11 +151,29 @@ async def on_negotiate(ctx: Context, sender: str, req: NegotiateRequest):
             target.update(price=reply.price or target["price"], discount=reply.discount, matched=True)
 
     await asyncio.gather(*(push(t) for t in targets))
-    ranked = sorted(offers, key=lambda o: (not _has_free_month(o), o["price"] + (o.get("fees") or 0) / 12))
+    ranked = await rank_offers(offers)
     best = ranked[0] if ranked else None
     note = f"Best: {BUILDINGS[best['building_id']]['name']} at ${best['price']} ({best.get('discount')})" if best else "No offers"
     await hub.step("negotiate", "done", note)
     await ctx.send(sender, NegotiateResult(request_id=req.request_id, offers=offers, best_building_id=best and best["building_id"], note=note))
+
+
+async def rank_offers(offers: list[dict]) -> list[dict]:
+    """Composite score: price in code (0-1, cheaper is better) + Jev's judged special value, no-SSN friendliness and fit."""
+    from homie import jev
+
+    renter = "; ".join(m["content"] for m in await mapi.recall("apartment preferences must-haves budget", limit=5, tags=["profile"]))
+    scores = await asyncio.gather(*(jev.score_offer({"name": BUILDINGS[o["building_id"]]["name"], "price": o["price"],
+                                                     "special": o.get("discount"), "no_ssn_policy": o.get("ssn_alternative")},
+                                                    renter or "International student, no SSN") for o in offers))
+    lo, hi = min(o["price"] for o in offers), max(o["price"] for o in offers)
+    for o, sc in zip(offers, scores):
+        price = 1 - (o["price"] - lo) / (hi - lo) if hi > lo else 1.0
+        if sc:
+            o["score"] = round(0.45 * price + 0.25 * sc["special"] + 0.2 * sc["no_ssn_ok"] + 0.1 * sc["fits"], 3)
+        else:
+            o["score"] = round(0.6 * price + (0.4 if _has_free_month(o) else 0), 3)
+    return sorted(offers, key=lambda o: -o["score"])
 
 
 # ---------- Paperwork ----------
@@ -184,6 +210,11 @@ async def on_paperwork(ctx: Context, sender: str, req: PaperworkRequest):
 @repairs.on_message(RepairRequest, replies=RepairResult)
 async def on_repair(ctx: Context, sender: str, req: RepairRequest):
     CURRENT_USER.set(req.user)
+    from homie import jev
+
+    if await jev.is_emergency(req.issue):
+        team_post("fix", f"This sounds like an emergency ({req.issue}). If there's gas, fire or flooding, get out and call 911 first. "
+                         "I'm calling the office's emergency line right now.")
     ticket = await hub.post("/api/repairs", {"building_id": req.building_id, "issue": req.issue, "photo_url": req.photo_url})
     ticket_id = ticket.get("ticket_id") or f"R-{uuid.uuid4().hex[:6].upper()}"
     for attempt in (1, 2):

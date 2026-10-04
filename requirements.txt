@@ -5,6 +5,7 @@ httpx
 openai
 pillow
 playwright
+pydantic-ai-slim[typesafe]
 python-dotenv
 relaymessenger
 requests
