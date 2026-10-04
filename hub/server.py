@@ -81,6 +81,11 @@ def dashboard():
     return FileResponse(STATIC / "dashboard.html")
 
 
+@app.get("/flow")
+def flow():
+    return FileResponse(STATIC / "flow.html")
+
+
 @app.get("/about")
 def landing():
     return FileResponse(STATIC / "landing.html")

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Homie Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #05070a; --grid: rgba(120, 160, 200, 0.06); --line: rgba(140, 170, 200, 0.22); --ink: #d7e3ee; --dim: #6c7f92;
+    --live: #3dffa0; --hot: #ffb547; --bad: #ff5d6c; --accent: #6ab8ff; --panel: rgba(9, 13, 19, 0.92);
+  }
+  :root[data-theme="light"] { --bg: #05070a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+  body {
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 32px 32px; background-position: -1px -1px;
+  }
+  header { position: fixed; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 14px; padding: 14px 20px; z-index: 5;
+           font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  header b { color: var(--ink); font-weight: 700; }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+  header .dot.on { background: var(--live); box-shadow: 0 0 10px var(--live); }
+  header a { color: var(--dim); text-decoration: none; margin-left: auto; }
+  header a:hover { color: var(--ink); }
+  #request { color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 12px; max-width: 46vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  #viewport { position: absolute; inset: 0; }
+  #stage { position: absolute; left: 0; top: 0; width: 1500px; height: 860px; transform-origin: 0 0; }
+  svg#wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .wire { fill: none; stroke: var(--line); stroke-width: 1.2; }
+  .wire.active { stroke: var(--accent); stroke-dasharray: 6 8; animation: flow .7s linear infinite; stroke-width: 1.6; filter: drop-shadow(0 0 4px var(--accent)); }
+  .wire.live { stroke: var(--live); stroke-dasharray: 3 6; animation: flow .5s linear infinite; stroke-width: 1.8; filter: drop-shadow(0 0 5px var(--live)); }
+  @keyframes flow { to { stroke-dashoffset: -28; } }
+
+  .node { position: absolute; width: 150px; height: 74px; border: 1px solid var(--line); background: rgba(6, 10, 15, 0.85);
+          font-family: "JetBrains Mono", monospace; padding: 9px 10px; cursor: pointer; transition: border-color .2s, box-shadow .2s, transform .2s; }
+  .node::before, .node::after { content: ""; position: absolute; width: 8px; height: 8px; border-color: var(--dim); border-style: solid; }
+  .node::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+  .node::after { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+  .node:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .node .row { display: flex; align-items: center; gap: 8px; }
+  .node img { width: 26px; height: 26px; border-radius: 4px; border: 1px solid var(--line); object-fit: cover; image-rendering: auto; }
+  .node .name { font-size: 12px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .sub { margin-top: 7px; font-size: 10.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .tag { position: absolute; top: -9px; right: 8px; font-size: 9px; padding: 1px 5px; background: var(--bg); border: 1px solid var(--line); color: var(--dim); letter-spacing: .1em; }
+  .node.agent { width: 132px; height: 56px; }
+  .node.agent .sub { margin-top: 4px; }
+  .node.core { width: 168px; height: 84px; border-color: var(--accent); box-shadow: 0 0 24px rgba(106, 184, 255, .12); }
+  .node.active { border-color: var(--accent); box-shadow: 0 0 18px rgba(106, 184, 255, .25); }
+  .node.live { border-color: var(--live); box-shadow: 0 0 22px rgba(61, 255, 160, .35); animation: pulse 1.4s ease-in-out infinite; }
+  .node.live .tag { color: var(--live); border-color: var(--live); }
+  .node.done .tag { color: var(--hot); border-color: var(--hot); }
+  .node.missed { opacity: .55; }
+  .node.listening { outline: 1px solid var(--live); outline-offset: 4px; }
+  @keyframes pulse { 50% { box-shadow: 0 0 34px rgba(61, 255, 160, .55); } }
+  .colhead { position: absolute; font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .18em; color: var(--dim); text-transform: uppercase; }
+
+  #panel { position: fixed; right: 16px; top: 56px; bottom: 16px; width: min(380px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line);
+           backdrop-filter: blur(10px); display: none; flex-direction: column; z-index: 6; font-family: "JetBrains Mono", monospace; }
+  #panel.open { display: flex; }
+  #panel .head { padding: 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  #panel .head img { width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--line); }
+  #panel .head .t { font-size: 13px; font-weight: 700; }
+  #panel .head .s { font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+  #panel .close { margin-left: auto; background: none; border: 1px solid var(--line); color: var(--dim); cursor: pointer; font: inherit; padding: 4px 8px; }
+  #panel .close:hover { color: var(--ink); border-color: var(--ink); }
+  #scope { height: 90px; width: 100%; display: block; border-bottom: 1px solid var(--line); }
+  #listenbar { display: flex; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); align-items: center; font-size: 11px; color: var(--dim); }
+  #listenbtn { background: transparent; border: 1px solid var(--live); color: var(--live); font: inherit; font-size: 11px; padding: 6px 10px; cursor: pointer; letter-spacing: .08em; }
+  #listenbtn[disabled] { border-color: var(--line); color: var(--dim); cursor: default; }
+  #lines { flex: 1; overflow-y: auto; padding: 12px 14px; font-size: 12px; line-height: 1.55; }
+  #lines .l { margin-bottom: 9px; }
+  #lines .who { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  #lines .homie .who { color: var(--accent); }
+  #lines .office .who { color: var(--hot); }
+  #lines .empty { color: var(--dim); }
+
+  @media (max-width: 720px) {
+    header { font-size: 10px; gap: 8px; padding: 12px 16px; flex-wrap: wrap; }
+    #request { max-width: 100%; order: 9; flex-basis: 100%; }
+    #panel { top: auto; height: 62vh; right: 8px; left: 8px; width: auto; bottom: 8px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="conn"></span><b>Homie</b><span>flow</span>
+  <span id="request"></span>
+  <a href="/">mission control</a>
+</header>
+<div id="viewport"><div id="stage"><svg id="wires"></svg></div></div>
+
+<aside id="panel">
+  <div class="head"><img id="p-img" alt="" /><div><div class="t" id="p-title"></div><div class="s" id="p-sub"></div></div>
+    <button class="close" id="p-close">esc</button></div>
+  <canvas id="scope"></canvas>
+  <div id="listenbar"><button id="listenbtn">▶ LISTEN LIVE</button><span id="listenstate">no call on this node</span></div>
+  <div id="lines"></div>
+</aside>
+
+<script>
+const AGENTS = [
+  ["homie-caller", "Calls", "calls", "phones offices"],
+  ["homie-scout", "Scout", "scout", "reads websites"],
+  ["homie-pictures", "Pics", "pics", "screenshots"],
+  ["homie-negotiator", "Negotiator", "negotiator", "plays offers"],
+  ["homie-paperwork", "Papers", "papers", "no-SSN docs"],
+  ["homie-policy", "Policy", "policy", "tenant law"],
+  ["homie-memory", "Memory", "memory", "remembers you"],
+  ["homie-later", "Later", "later", "follow-ups"],
+  ["homie-repairs", "Fix", "fix", "repairs"],
+];
+const W = 1500, H = 860;
+const stage = document.getElementById("stage"), svg = document.getElementById("wires");
+const nodes = {}, wires = [];
+let S = { offers: {}, agentlog: [], request: {} }, selected = null;
+
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function node(id, x, y, cls, img, name, sub, tag) {
+  let n = nodes[id];
+  if (!n) {
+    n = el("div", "node " + cls);
+    n.innerHTML = `<span class="tag"></span><div class="row">${img ? `<img src="${img}" alt="">` : ""}<span class="name"></span></div><div class="sub"></div>`;
+    n.onclick = () => openPanel(id);
+    stage.appendChild(n); nodes[id] = n;
+  }
+  n.style.left = x + "px"; n.style.top = y + "px";
+  n.querySelector(".name").textContent = name;
+  n.querySelector(".sub").textContent = sub || "";
+  const t = n.querySelector(".tag"); t.textContent = tag || ""; t.style.display = tag ? "" : "none";
+  n.dataset.cx = x + n.offsetWidth / 2; n.dataset.cy = y + n.offsetHeight / 2;
+  n.dataset.l = x; n.dataset.r = x + n.offsetWidth;
+  return n;
+}
+
+function head(text, x, y) { const h = el("div", "colhead", text); h.style.left = x + "px"; h.style.top = y + "px"; stage.appendChild(h); }
+head("you", 40, 96); head("orchestrator", 250, 96); head("agents", 560, 96); head("buildings · live calls", 900, 96);
+
+function wire(a, b, cls) {
+  const A = nodes[a], B = nodes[b]; if (!A || !B) return;
+  const x1 = +A.dataset.r, y1 = +A.dataset.cy, x2 = +B.dataset.l, y2 = +B.dataset.cy, mx = (x1 + x2) / 2;
+  wires.push(`<path class="wire ${cls || ""}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" />`);
+}
+
+function recentPairs() {
+  const now = Date.now() / 1000, active = new Set(), busy = new Set();
+  for (const m of (S.agentlog || []).slice(-60)) {
+    if (now - (m.ts || 0) > 8) continue;
+    const from = m.from === "jev" ? "homie" : m.from, to = m.to === "jev" ? "homie" : m.to;
+    active.add(from + ">" + to); active.add(to + ">" + from); busy.add(from); busy.add(to);
+  }
+  return { active, busy };
+}
+
+function render() {
+  wires.length = 0;
+  const { active, busy } = recentPairs();
+  const req = S.request || {};
+  const reqText = Object.entries(req).filter(([k, v]) => v !== null && v !== "" && !String(k).startsWith("_")).map(([k, v]) => `${k} ${v}`).join(" · ");
+  document.getElementById("request").textContent = reqText;
+
+  node("you", 40, 380, "agent", "/avatars/memory.png", "You · Relay", reqText ? "request in" : "waiting", "");
+  const homie = node("homie", 250, 372, "core" + (busy.has("homie") ? " active" : ""), "/avatars/homie.png", "Homie", "Jev routes every decision", "LEAD");
+  wire("you", "homie", busy.has("homie") ? "active" : "");
+
+  AGENTS.forEach(([id, name, img, sub], i) => {
+    const y = 130 + i * 76;
+    node(id, 560, y, "agent" + (busy.has(id) ? " active" : ""), `/avatars/${img}.png`, name, sub, busy.has(id) ? "WORKING" : "");
+    wire("homie", id, active.has("homie>" + id) ? "active" : "");
+  });
+
+  const offers = Object.values(S.offers || {}).slice(0, 10);
+  const top = Math.max(130, 430 - offers.length * 38);
+  const seen = new Set();
+  offers.forEach((o, i) => {
+    const id = "b:" + o.building_id; seen.add(id);
+    const live = !!o.on_call, done = !!o.price, missed = /no answer|didn't|closed|busy|failed/i.test(o.status || "");
+    const sub = live ? "● on the phone now" : o.price ? `$${o.price}/mo ${o.discount ? "· " + o.discount : ""}` : (o.status || "queued");
+    node(id, 900, top + i * 76, (live ? "live" : done ? "done" : missed ? "missed" : "") + (selected === id && listening ? " listening" : ""),
+      "/avatars/calls.png", o.name || o.building_id, sub, live ? "LIVE" : done ? "QUOTE" : "");
+    wire("homie-caller", id, live ? "live" : (active.has("homie-caller>homie") ? "active" : ""));
+  });
+  for (const id of Object.keys(nodes)) if (id.startsWith("b:") && !seen.has(id)) { nodes[id].remove(); delete nodes[id]; }
+
+  svg.innerHTML = wires.join("");
+  if (selected) fillPanel(selected);
+  fit();
+}
+
+function fit() {
+  const vw = innerWidth, vh = innerHeight;
+  const s = Math.min(vw / W, (vh - 50) / H);
+  stage.style.transform = `translate(${Math.max(0, (vw - W * s) / 2)}px, ${50}px) scale(${s})`;
+}
+addEventListener("resize", fit);
+
+// ---------- side panel ----------
+const panel = document.getElementById("panel");
+function openPanel(id) { if (selected !== id) stopListening(); selected = id; panel.classList.add("open"); fillPanel(id); }
+document.getElementById("p-close").onclick = () => { stopListening(); selected = null; panel.classList.remove("open"); render(); };
+addEventListener("keydown", e => { if (e.key === "Escape") document.getElementById("p-close").click(); });
+
+function fillPanel(id) {
+  const img = document.getElementById("p-img"), title = document.getElementById("p-title"), sub = document.getElementById("p-sub");
+  const lines = document.getElementById("lines"), btn = document.getElementById("listenbtn"), state = document.getElementById("listenstate");
+  if (id.startsWith("b:")) {
+    const o = (S.offers || {})[id.slice(2)] || {};
+    img.src = "/avatars/calls.png"; title.textContent = o.name || id.slice(2);
+    sub.textContent = [o.phone, o.address].filter(Boolean).join(" · ");
+    const t = o.transcript || [];
+    lines.innerHTML = t.length ? t.map(l => { const [who, ...rest] = l.split(": "); return `<div class="l ${esc(who)}"><div class="who">${who === "homie" ? "Homie Calls" : esc(who)}</div>${esc(rest.join(": "))}</div>`; }).join("")
+                               : `<div class="empty">${o.on_call ? "Connecting…" : "No call on this building yet."}</div>`;
+    lines.scrollTop = lines.scrollHeight;
+    btn.disabled = !o.on_call || !o.call_key;
+    if (!listening) state.textContent = o.on_call ? "call in progress" : (o.price ? "call finished" : "no live call");
+    if (listening && !o.on_call) stopListening("call ended");
+    if (o.on_call && o.call_key) btn.dataset.key = o.call_key;
+  } else {
+    const a = AGENTS.find(a => a[0] === id), name = id === "homie" ? "Homie" : id === "you" ? "You" : a ? a[1] : id;
+    img.src = `/avatars/${id === "homie" ? "homie" : id === "you" ? "memory" : a ? a[2] : "homie"}.png`;
+    title.textContent = name; sub.textContent = id === "homie" ? "orchestrator" : a ? a[3] : "";
+    const log = (S.agentlog || []).filter(m => m.from === id || m.to === id || (id === "homie" && m.from === "jev")).slice(-30);
+    lines.innerHTML = log.length ? log.map(m => `<div class="l"><div class="who">${esc(m.t || "")} ${esc(m.from)} → ${esc(m.to)} · ${esc(m.kind)}</div>${esc(m.summary)}</div>`).join("")
+                                 : `<div class="empty">Nothing yet.</div>`;
+    lines.scrollTop = lines.scrollHeight;
+    btn.disabled = true; if (!listening) state.textContent = "agents talk in messages, not audio";
+  }
+}
+
+// ---------- live listening ----------
+let ac = null, ws = null, listening = false, analyser = null, next = [0, 0];
+document.getElementById("listenbtn").onclick = () => listening ? stopListening() : startListening(document.getElementById("listenbtn").dataset.key);
+
+function startListening(key) {
+  if (!key) return;
+  ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+  ac.resume();
+  analyser = analyser || (() => { const a = ac.createAnalyser(); a.fftSize = 1024; a.connect(ac.destination); return a; })();
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/api/listen/${key}`);
+  ws.binaryType = "arraybuffer";
+  ws.onmessage = e => play(e.data);
+  ws.onclose = () => { if (listening) stopListening("call ended"); };
+  listening = true; next = [0, 0];
+  document.getElementById("listenbtn").textContent = "■ STOP";
+  document.getElementById("listenstate").textContent = "listening live · office in amber, Homie in blue";
+  render(); drawScope();
+}
+
+function stopListening(reason) {
+  listening = false;
+  if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+  document.getElementById("listenbtn").textContent = "▶ LISTEN LIVE";
+  if (reason) document.getElementById("listenstate").textContent = reason;
+}
+
+function play(buf) {
+  const view = new DataView(buf), speaker = view.getUint8(0), rate = view.getUint32(1, true);
+  const n = (buf.byteLength - 5) >> 1; if (!n) return;
+  const audio = ac.createBuffer(1, n, rate), ch = audio.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = view.getInt16(5 + i * 2, true) / 32768;
+  const src = ac.createBufferSource(); src.buffer = audio; src.connect(analyser);
+  const s = speaker ? 1 : 0, t = Math.max(ac.currentTime + 0.06, next[s]);
+  src.start(t); next[s] = t + audio.duration;
+}
+
+const scope = document.getElementById("scope"), sctx = scope.getContext("2d");
+function drawScope() {
+  const w = scope.width = scope.clientWidth * devicePixelRatio, h = scope.height = scope.clientHeight * devicePixelRatio;
+  sctx.clearRect(0, 0, w, h);
+  sctx.strokeStyle = "rgba(140,170,200,.15)"; sctx.beginPath(); sctx.moveTo(0, h / 2); sctx.lineTo(w, h / 2); sctx.stroke();
+  if (analyser && listening) {
+    const d = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(d);
+    sctx.strokeStyle = "#3dffa0"; sctx.lineWidth = 1.5 * devicePixelRatio; sctx.shadowColor = "#3dffa0"; sctx.shadowBlur = 8; sctx.beginPath();
+    for (let i = 0; i < d.length; i++) { const x = i / d.length * w, y = (d[i] / 255) * h; i ? sctx.lineTo(x, y) : sctx.moveTo(x, y); }
+    sctx.stroke(); sctx.shadowBlur = 0;
+    requestAnimationFrame(drawScope);
+  }
+}
+
+// ---------- live state ----------
+function connect() {
+  const es = new EventSource("/api/events");
+  es.onopen = () => document.getElementById("conn").classList.add("on");
+  es.onmessage = e => { S = JSON.parse(e.data); render(); };
+  es.onerror = () => { document.getElementById("conn").classList.remove("on"); es.close(); setTimeout(connect, 2000); };
+}
+render(); connect();
+setInterval(render, 2000);  // let "working" glows fade as messages age
+</script>
+</body>
+</html>
