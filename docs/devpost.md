@@ -2,7 +2,7 @@
 
 > **This isn't a chatbot. It's a team.** One text from the other side of the world, and eleven AI agents read every listing, phone every leasing office, negotiate the best deal and start your application, while you sleep.
 
-![Homie architecture](docs/homie_architecture.png)
+![Homie architecture](https://raw.githubusercontent.com/kbhatnagar1506/homie/main/docs/homie_architecture.png)
 
 ---
 
@@ -84,6 +84,35 @@ Even on a Sunday, when every office is closed, Homie still decides: it ranks the
 
 ---
 
+## 🏗 Architecture
+
+![Homie architecture](https://raw.githubusercontent.com/kbhatnagar1506/homie/main/docs/homie_architecture.png)
+
+```
+  YOU                         ORCHESTRATOR                       SPECIALISTS (in order)              UNDER THE HOOD
+  ───                         ────────────                       ─────────────────────               ──────────────
+  Relay app ──────┐                                         ┌──▶ ① Scout ───────────────────▶ Google Places + Playwright
+  (group chat,    │                                         ├──▶ ② Vibecheck (shortlist + swipe deck)
+   7 contacts,    ├──▶  Homie (uAgent, @homie-usa) ─────────┼──▶ ③ Calls ────────────────────▶ ElevenLabs Agent ⇄ Twilio
+   video calls,   │     · Chat Protocol + Payment Protocol  │                                 (μ-law 8 kHz passthrough,
+   rich cards)    │     · Jev: typed decisions + gates      ├──▶ ④ Later (callbacks on special days)   tapped → /flow live audio)
+  ASI:One ────────┘     · Gemini writes every word          ├──▶ ⑤ Negotiator
+  (Chat Protocol)       · request-id RPC to 10 specialists  ├──▶ ⑥ Papers ───────────────────▶ Browser Use Cloud (live view)
+                               │                            └──▶ Fix · Policy · Pics ────────▶ Pipecat + Gemini vision + Veo
+                               ▼
+                        Memory (Mapi, per user)       Hub (FastAPI): mission control · /flow · /vibe · /portal · /live · SSE
+                        All 11 agents + hub in one Cloud Run container · every agent registered on Agentverse
+```
+
+**How a message moves:**
+1. Your text arrives from ASI:One (Chat Protocol) or Relay (through our Relay bridge agent) at **Homie**.
+2. **Jev** answers typed questions about it in one call (route, bedrooms, no-SSN, urgency). Homie acts only above a confidence gate.
+3. Homie fans out over a **request-id RPC**: Scout reads 6 sites in parallel, Calls opens up to 10 calls at once, and every reply comes back matched by ID.
+4. Every hop is posted to the hub, so **mission control** and `/flow` show agents working and calls happening in real time over SSE and WebSockets.
+5. **Later** persists future tasks in agent storage and wakes Homie up when they're due, even after a restart.
+
+---
+
 ## 🏁 How Homie meets the Fetch.ai judging criteria
 
 | Criterion | What Homie does |
@@ -101,12 +130,40 @@ Even on a Sunday, when every office is closed, Homie still decides: it ranks the
 - **Error handling:** retries, a cache fallback, a demo-call fallback, and confidence gates on every decision.
 - **Long-term viability:** Later's tasks survive restarts.
 
-## 💬 Why Relay
+## 💬 Built for Relay
 
-Relay turns Homie from a bot into a **team you can text and call.**
-- **Seven agents are your contacts,** and the Homie Team group chat shows them working out loud.
-- **Every important moment is a one-tap card:** the swipe deck, Approve, "watch your application live".
-- **You can video-call any agent and point your camera at the problem.** That's something only a messenger built for agents makes feel natural.
+Relay is where Homie stops being a bot and becomes **a team you can text, watch and video-call.**
+
+```
+                        ┌──────────── Relay ─────────────┐
+   you ──text/call──▶   │  Homie Team group chat         │   ◀── agents post in their own voice + emoji
+                        │  @homie @homiecalls @homiepapers│
+                        │  @homiefix @homiepolicy         │   ◀── rich cards: swipe deck · Approve ·
+                        │  @homiepics @homiememory        │       "watch your application live" · live call
+                        └──────────────┬─────────────────┘
+                                       │ relaymessenger SDK (websocket per agent)
+                                       ▼
+                         Relay bridge (uAgent) ⇄ Homie + 10 specialists
+                                       │
+              video call ─────────────▶ Pipecat RelayTransport ─▶ ElevenLabs STT → Gemini (tools + vision) → ElevenLabs TTS
+                                                                   └▶ Veo talking/listening figurine as the video track
+```
+
+**What we built on Relay:**
+- **Seven agent contacts, one team chat.** Every Homie agent is a real Relay account with its own Gemini-made avatar, persona and bio. They share a **Homie Team** group chat, and in it Jev decides which teammate should answer each message.
+- **Agents that talk like people.** Every update goes through a persona pass: Calls is the upbeat negotiator, Papers the calm precise one, Memory answers only from what it remembers. All in short texts with emoji, and every number kept exactly.
+- **Every chat is a front door.** Text Homie, the group, or even **Memory** "get me an apartment" and the full 11-agent pipeline runs, reporting back in that same thread. Fix starts repairs, and Policy answers lease questions.
+- **Rich cards for every big moment:**
+  - the **vibe-check swipe deck**
+  - **Approve / Keep looking** buttons
+  - a **"watch your application live"** card that opens the Browser Use session
+  - a **video-call card**
+- **📹 Video calls with a figurine that can see.**
+  - Call any agent and a Pixar-style 3D figurine answers. Its talking and listening loops are generated with **Veo 3** and switched in real time, and the agent always greets you first.
+  - **Pipecat runs the call over Relay's call transport:** ElevenLabs speech-to-text, then Gemini Flash-Lite with tools, then ElevenLabs voice.
+  - **It sees your camera.** `look_at_problem` grabs a frame from your video and Gemini vision describes the issue; `file_maintenance_request` files the ticket with the photo and hands it to Fix, which chases the office.
+- **Proactive, not reactive.** Homie messages *you*: when the deck is ready, when a call ends, when Later wakes up on Monday, when your application is filling.
+- **Payments in the chat.** Homie's fee request is built as a Relay payment card at key handoff. *(It needs Stripe connected in the Relay console.)*
 
 ---
 
@@ -120,16 +177,8 @@ Relay turns Homie from a bot into a **team you can text and call.**
 - **Agent-to-agent messaging:** specialists talk through our own **request-id RPC** (`homie/rpc.py`) instead of `send_and_receive`. That lets dozens of requests be in flight at once (10 parallel calls, 6 parallel website reads) with no session collisions.
 - **Later is a true long-running agent.** It holds future tasks in agent storage, survives restarts, wakes up on time, and hands work back to Homie.
 
-### Relay: your housing team lives in your messenger
-- **Seven Homie agents are real Relay contacts** (`@homie`, `@homiecalls`, `@homiepapers`, `@homiefix`, `@homiepolicy`, `@homiepics`, `@homiememory`), plus a **Homie Team group chat** where they talk to you, and to each other, like people, emoji included.
-- **Rich cards everywhere:** the swipe deck, Approve buttons, the live application and the live call all arrive as one-tap cards.
-- **Any chat starts real work.** Text Homie, or even Memory, "get me an apartment" and the whole 11-agent pipeline runs, reporting back in that same thread.
-
-#### 📹 Video-call your agents
-- **Tap call on any agent in Relay and a Pixar-style 3D figurine picks up.** Its talking and listening loops are generated with **Veo 3**, and it switches between them seamlessly as the conversation flows.
-- **It hears you, thinks, and talks back in real time:** ElevenLabs speech-to-text, Gemini Flash-Lite with tools, and a natural ElevenLabs voice, streamed through **Pipecat** into Relay's call transport.
-- **It sees through your camera.** Say *"my ice maker is broken"* and Fix says *"let me take a look"*, grabs a frame from your video, reads it with Gemini vision, describes what's wrong, and files a maintenance ticket with the photo attached. Then it chases the office until a slot is booked.
-- **No Relay app? There's a browser version** at `/live`, built on ElevenLabs Agents with the same figurine.
+### Relay
+See **💬 Built for Relay** above: seven agent contacts, a team group chat, rich cards, and video calls with a Veo figurine that sees through your camera.
 
 ### Calls you can hear: ElevenLabs + Twilio
 - **Each call runs on an ElevenLabs Agent**, bridged from Twilio media streams in **μ-law 8 kHz with zero transcoding**. Audio passes straight through.
