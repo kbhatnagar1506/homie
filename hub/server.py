@@ -320,8 +320,10 @@ async def events(request: Request):
     q.put_nowait(snapshot())
 
     async def stream():
+        started = time.time()
         try:
-            while not await request.is_disconnected():
+            # Close every 2 minutes; the browser reconnects at once. An open tab can then never pin an old instance.
+            while not await request.is_disconnected() and time.time() - started < 120:
                 try:
                     s = await asyncio.wait_for(q.get(), timeout=15)
                     yield f"data: {json.dumps(s)}\n\n"

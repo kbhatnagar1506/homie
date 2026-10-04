@@ -252,7 +252,8 @@ class RelayTeam:
             if event["event_id"] in self.seen:
                 return
             data = event["data"]
-            if event["event_type"] == "message.received" and data.get("direction") == "inbound":
+            if event["event_type"] in ("message.received", "message.created") and data.get("direction") in (None, "inbound") \
+                    and not data.get("is_from_me"):
                 await self._on_message(role, data)
             elif event["event_type"] == "payment.succeeded" and role == "homie":
                 await hub.step("keys", "done", "Paid on keys (Relay card)")
@@ -380,13 +381,18 @@ class RelayTeam:
         await self.send("memory", chat_id, reply)
 
     async def _on_message(self, receiver: str, data: dict) -> None:
-        if data.get("sender_handle") != self.owner:
+        # Relay's payload changed: the sender moved from "sender_handle" to "from"/"from_handle", the chat to "chat_id".
+        sender = data.get("sender_handle") or data.get("from") or (data.get("from_handle") or {}).get("handle") \
+            or (data.get("sender") or {}).get("handle")
+        if sender != self.owner:
             return  # ignore our own team's messages in the group
         text = "\n".join(p.get("value", "") for p in data.get("parts", []) if p.get("type") == "text").strip()
         if not text:
             return
-        chat_id = data["chat"]["id"]
-        role = await self._target_role(text, bool(data["chat"].get("is_group")), receiver)
+        chat = data.get("chat") or {}
+        chat_id = chat.get("id") or data.get("chat_id")
+        is_group = bool(chat["is_group"]) if "is_group" in chat else chat_id == self.state.get("team_chat")
+        role = await self._target_role(text, is_group, receiver)
         if role != receiver:
             return  # another Homie contact answers this one
         relay = self.relays[role]
@@ -404,7 +410,7 @@ class RelayTeam:
         if role == "pics":
             await self._pics(chat_id, text)
             return
-        if role == "fix" and not data["chat"].get("is_group"):
+        if role == "fix" and not is_group:
             await self.live_card("fix", chat_id)
         profile = await memory.update(self.owner, text)
         intent = await parse_intent(text)
