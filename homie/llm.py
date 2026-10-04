@@ -121,6 +121,7 @@ def _beds(t: str) -> int | None:
 
 EXTRACT_PROMPT = """You read a phone call transcript between an AI assistant and a leasing office.
 Return JSON with keys: price (int), discount (string), discount_day (int day of month or null),
+special_when (string: when the special or a better price applies, e.g. "Wednesdays", "until Oct 31", "move in by the 15th", "first of the month"),
 ssn_alternative (string), fees (int), matched (bool, did they agree to match a competitor offer),
 payment (string, accepted payment methods), repair_slot (string), summary (one sentence).
 Use null for anything not said. Reply with JSON only."""

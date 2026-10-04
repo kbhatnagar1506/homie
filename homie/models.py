@@ -20,6 +20,7 @@ class CallResult(Model):
     price: int | None = None
     discount: str | None = None
     discount_day: int | None = None
+    special_when: str | None = None
     ssn_alternative: str | None = None
     fees: int | None = None
     matched: bool | None = None

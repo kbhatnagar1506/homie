@@ -207,7 +207,7 @@ function render() {
     const live = !!o.on_call, done = !!o.price, missed = /no answer|didn't|closed|busy|failed/i.test(o.status || "");
     const sub = live ? "● on the phone now" : o.price ? `$${o.price}/mo ${o.discount ? "· " + o.discount : ""}` : o.site_price ? `site $${o.site_price} · ${o.status || ""}` : (o.status || "queued");
     node(id, 900, top + i * 76, (live ? "live" : done ? "done" : missed ? "missed" : "") + ((o.call_key && socks[o.call_key]) ? " listening" : ""),
-      "/avatars/calls.png", o.name || o.building_id, sub, live ? (o.simulated ? "SIMULATED" : "LIVE") : done ? (o.simulated ? "SIM QUOTE" : "QUOTE") : "");
+      "/avatars/calls.png", o.name || o.building_id, sub, live ? (o.simulated ? "LIVE · DEMO" : "LIVE") : done ? "QUOTE" : "");
     wire("homie-caller", id, live ? "live" : (active.has("homie-caller>homie") ? "active" : ""));
   });
   for (const id of Object.keys(nodes)) if (id.startsWith("b:") && !seen.has(id)) { nodes[id].remove(); delete nodes[id]; }

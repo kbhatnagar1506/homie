@@ -485,7 +485,7 @@ async def _speak(text: str, voice: str) -> bytes:
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice}", params={"output_format": "pcm_16000"},
                                   headers={"xi-api-key": await eleven.best_key()},
-                                  json={"text": text, "model_id": "eleven_flash_v2_5", "voice_settings": {"stability": 0.45, "similarity_boost": 0.8}})
+                                  json={"text": text, "model_id": "eleven_flash_v2_5", "voice_settings": {"stability": 0.32, "similarity_boost": 0.8, "style": 0.25, "use_speaker_boost": True}})
         return r.content if r.status_code == 200 else b""
     except Exception:
         return b""
@@ -496,11 +496,23 @@ async def _play_sim(key: str, building_id: str, lines: list[dict]) -> None:
     from homie.config import env
 
     offer = state["offers"].setdefault(building_id, {"building_id": building_id})
-    offer.update({"call_key": key, "on_call": True, "simulated": True, "status": "on a simulated call"})
+    offer.update({"call_key": key, "on_call": True, "simulated": True, "status": "on the phone"})
     await publish()
-    voices = {"homie": env("PHONE_VOICE_ID", "cgSgspJ2msm6clMCkdW9"), "office": env("SIM_OFFICE_VOICE_ID", "CwhRBWXzGAHq8TQ4Fs17")}
+    import random as _r
+
+    office_voice = _r.Random(building_id).choice(["CwhRBWXzGAHq8TQ4Fs17", "EXAVITQu4vr4xnSDxMaL", "bIHbv24MWmeRgasZH58o", "XrExE9yKIg1WjnnlVkGX", "cjVigY5qzO86Huf0OWal"])
+    voices = {"homie": env("PHONE_VOICE_ID", "cgSgspJ2msm6clMCkdW9"), "office": env("SIM_OFFICE_VOICE_ID", office_voice)}
     # Voice every line up front (in parallel) so playback never stalls.
     audio = await asyncio.gather(*(_speak(l["text"], voices.get(l["who"], voices["office"])) for l in lines))
+    # Two US ringback tones (440 + 480 Hz, 2 s on, 1 s off) before the manager picks up.
+    import math
+    import struct
+
+    ring = b"".join(struct.pack("<h", int(2600 * (math.sin(2 * math.pi * 440 * n / 16000) + math.sin(2 * math.pi * 480 * n / 16000))))
+                    if (n % 48000) < 32000 else b"\x00\x00" for n in range(16000 * 5))
+    for i in range(0, len(ring), 3200):
+        phone._broadcast(key, 1, 16000, ring[i:i + 3200])
+        await asyncio.sleep(0.1)
     said = []
     for line, pcm in zip(lines, audio):
         text = f"{line['who']}: {line['text']}"
@@ -513,7 +525,7 @@ async def _play_sim(key: str, building_id: str, lines: list[dict]) -> None:
                 await asyncio.sleep(0.1)
         else:
             await asyncio.sleep(0.35 * len(line["text"].split()) + 0.4)
-        await asyncio.sleep(0.35)
+        await asyncio.sleep(_r.uniform(0.15, 0.45))
     offer.update({"on_call": False})
     phone.CALLS[key]["live"] = False
     phone.finish(key, answered=True, transcript="\n".join(said))

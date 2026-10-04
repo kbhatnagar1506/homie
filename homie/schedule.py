@@ -41,5 +41,6 @@ def next_open(hours: list[str], now: datetime | None = None) -> datetime:
 
 def human(at: datetime) -> str:
     today = datetime.now(TZ).date()
-    day = "today" if at.date() == today else ("tomorrow" if at.date() == today + timedelta(days=1) else at.strftime("%A"))
+    day = ("today" if at.date() == today else "tomorrow" if at.date() == today + timedelta(days=1)
+           else at.strftime("%A") if (at.date() - today).days < 7 else at.strftime("%A %b %-d"))
     return f"{day} at {at.strftime('%-I:%M %p')} ET"

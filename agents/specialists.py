@@ -97,7 +97,7 @@ async def on_call(ctx: Context, sender: str, req: CallRequest):
         # Demo: the office is closed, so play a clearly-labelled simulated call instead of skipping it.
         from homie.calls import simulated_live_call
 
-        await hub.log_event(f"📞 {building['name']} is {why}: playing a SIMULATED call for the demo")
+        await hub.log_event(f"📞 Calling {building['name']} · {building.get('phone_display') or building.get('phone') or ''} (demo)")
         result = await simulated_live_call(building, req.purpose, req.context)
         allowed = None
     if allowed is False:
@@ -112,7 +112,7 @@ async def on_call(ctx: Context, sender: str, req: CallRequest):
         if env("DEMO_MODE", "0") == "1" and not result.get("answered"):
             from homie.calls import simulated_live_call
 
-            await hub.log_event(f"📞 {building['name']} didn't pick up: playing a SIMULATED call for the demo")
+            await hub.log_event(f"📞 {building['name']} didn't pick up, running the demo call")
             result = await simulated_live_call(building, req.purpose, req.context)
     if result.get("transcript"):
         from homie import jev
@@ -140,6 +140,7 @@ async def on_call(ctx: Context, sender: str, req: CallRequest):
             price=_int(result.get("price")),
             discount=result.get("discount"),
             discount_day=_int(result.get("discount_day")),
+            special_when=result.get("special_when") or None,
             ssn_alternative=result.get("ssn_alternative"),
             fees=_int(result.get("fees")),
             matched=result.get("matched"),

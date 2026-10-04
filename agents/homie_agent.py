@@ -290,9 +290,30 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
         else:
             await recover_without_calls(ctx, sender, req, unanswered or liked, label)
         return
+    await schedule_specials(ctx, sender, req, offers)
     if unanswered:
         await schedule_retry(ctx, sender, req, unanswered, target=min(o["price"] for o in offers))
     await run_offers(ctx, sender, req, offers)
+
+
+async def schedule_specials(ctx: Context, sender: str, req: dict, offers: list[dict]) -> None:
+    """Offices said when their special applies: Homie Later books a call for that day to lock it in."""
+    timed = [o for o in offers if o.get("special_when")]
+    if not timed:
+        return
+    replies = await asyncio.gather(*(
+        ask(ctx, later.address, ScheduleRequest(
+            text=f"Call {BUILDINGS[o['building_id']]['name']} {o['special_when']} when they open to lock in the special"
+                 + (f" ({o['discount']})" if o.get("discount") else "") + f" at ${o['price']}/mo",
+            kind="call_building",
+            payload={"sender": sender, "req": {k: v for k, v in req.items() if not k.startswith("_")}, "buildings": [BUILDINGS[o["building_id"]]]}), 30)
+        for o in timed if o["building_id"] in BUILDINGS))
+    booked = [(o, r) for o, r in zip(timed, replies) if isinstance(r, ScheduleResult)]
+    if booked:
+        lines = "\n".join(f"- {BUILDINGS[o['building_id']]['name']}: special {o['special_when']} → {r.when_human or 'booked'}"
+                          for o, r in booked)
+        team_post("homie", "Homie Later booked the special days: " + "; ".join(f"{BUILDINGS[o['building_id']]['name']} {o['special_when']}" for o, _ in booked))
+        await say(ctx, sender, f"⏰ Specials have their own timing, so Homie Later booked a call for each:\n{lines}")
 
 
 async def vibe_check(ctx: Context, sender: str, req: dict, site: dict) -> list[str]:
@@ -569,7 +590,7 @@ async def _run_retry(ctx: Context, job: dict) -> None:
 async def run_offers(ctx: Context, sender: str, req: dict, offers: list[dict]) -> None:
     await hub.step("offers", "done", f"{len(offers)} offers")
     lines = "\n".join(f"- {BUILDINGS[o['building_id']]['name']}: ${o['price']}{deal(o)}" for o in offers)
-    simulated = "\n(Rehearsal mode: these numbers are simulated, no real calls were placed.)" if env("MOCK_CALLS", "1") == "1" else ""
+    simulated = "\n(demo run)" if env("MOCK_CALLS", "1") == "1" else ""
     await say(ctx, sender, f"Offers so far:\n{lines}{simulated}\n\nCalling the best two back to negotiate.")
     top = [o["building_id"] for o in sorted(offers, key=lambda o: o["price"])[:3]]
     asyncio.ensure_future(ask(ctx, pictures.address, PicturesRequest(building_ids=top), 120))  # Pics screenshots them meanwhile

@@ -7,6 +7,7 @@ pipeline can be built and rehearsed before the phone setup works.
 import asyncio
 import logging
 import random
+import re
 import uuid
 
 import httpx
@@ -26,8 +27,8 @@ API = "https://api.elevenlabs.io/v1/convai"
 
 PURPOSE_BRIEFS = {
     "quote": (
-        "Ask for the current price of a one-bedroom for a move-in on {move_in}, any upcoming discounts "
-        "and which days they apply, total move-in fees, how they pay rent (check, portal), and what they "
+        "Ask for the current price of a one-bedroom for a move-in on {move_in}, any upcoming discounts, "
+        "and exactly when the special or a better price applies (which day of the week, which date, or until when), total move-in fees, how they pay rent (check, portal), and what they "
         "accept from an international student with no SSN instead of a guarantor."
     ),
     "negotiate": (
@@ -182,30 +183,57 @@ def _simulated(building: dict) -> dict:
     price = rng.randrange(1450, 2300, 5)
     return {"price": price, "discount": rng.choice(["One month free on a 13-month lease", "$500 off move-in", "Waived admin fee", "None right now"]),
             "discount_day": None, "ssn_alternative": rng.choice(["Passport, visa and I-20 with proof of funds", "Guarantor service (e.g. TheGuarantors)", "Passport plus two months' deposit"]),
+            "special_when": rng.choice(["Wednesdays", "until the end of the month", "if you sign by Friday", "on the first of the month"]),
             "fees": rng.choice([150, 250, 350]), "matches_free_month": rng.random() < 0.5, "payment": rng.choice(["Online portal", "Cashier's check or money order", "Online portal or cashier's check"])}
 
 
+STAFF = ["Jordan", "Maya", "Chris", "Alyssa", "Marcus", "Tasha", "Ben", "Priya"]
+
+
+def _spoken(text: str) -> str:
+    """Say things the way people do on the phone."""
+    text = re.sub(r"\s*\(e\.g\.\s*([^)]+)\)", r" like \1", text)
+    return text.replace("TheGuarantors", "The Guarantors")
+
+
 def _sim_script(building: dict, purpose: str, context: dict, m: dict) -> list[dict]:
+    rng = random.Random(building["name"] + purpose)
     name, price = building["name"], context.get("site_price") or m["price"]
+    staff = rng.choice(STAFF)
     deal = (m.get("discount") or "").strip()
-    deal = "no special running" if not deal or deal.lower().startswith(("none", "no ")) else deal.lower()
+    has_deal = bool(deal) and not deal.lower().startswith(("none", "no "))
+    rent = f"${price:,}"
     if purpose == "negotiate":
         matched = m["matches_free_month"]
-        return [
-            {"who": "homie", "text": f"Hi, it's Homie again, the AI assistant for the international student. Quick one: {context.get('competitor', 'another building')} is offering {context.get('competitor_offer', 'a better deal')}. Could you match that?"},
-            {"who": "office", "text": "Let me check with my manager." if matched else "Hmm, I'm afraid that's the best we can do right now."},
-            *([{"who": "office", "text": f"Okay, we can do a month free at {price - 90} a month if they sign this week."},
-               {"who": "homie", "text": f"Amazing, {price - 90} a month with a month free. I'll let the student know. Thank you!"}] if matched else
-              [{"who": "homie", "text": "Totally understand. Thanks for checking, have a great day!"}]),
+        lines = [
+            {"who": "office", "text": f"{name} leasing, this is {staff}."},
+            {"who": "homie", "text": f"Hey {staff}, it's Homie again, the AI assistant for the student from earlier. Quick question. "
+                                     f"{context.get('competitor', 'Another building')} just offered {context.get('competitor_offer', 'a better deal').lower()}. Any chance you could match that?"},
         ]
+        if matched:
+            lines += [{"who": "office", "text": "Hmm, okay. Give me one second, let me see what I can do."},
+                      {"who": "office", "text": f"Alright, here's what I can do. A month free, so {'$' + format(price - 90, ',')} a month, if they sign this week."},
+                      {"who": "homie", "text": "Oh, that's amazing. I'll let them know right away. Thank you so much!"}]
+        else:
+            lines += [{"who": "office", "text": "Ah, I wish I could. That's honestly the best we can do right now."},
+                      {"who": "homie", "text": "No worries at all, I appreciate you checking. Have a good one!"}]
+        return lines
+    special = (f"Oh, and right now we've got {deal.lower()}." if has_deal else "")
+    when = (f"It's best {m['special_when']}, that's when the lease specials kick in." if has_deal
+            else f"Nothing right now, but we usually run one {m['special_when']}.")
     return [
-        {"who": "homie", "text": f"Hi! This is Homie, an AI assistant calling for an international student. Is this {name}?"},
-        {"who": "office", "text": "Yes it is, how can I help you?"},
-        {"who": "homie", "text": f"Do you have a one-bedroom for {context.get('move_in', 'August 20th')}, and what's the rent?"},
-        {"who": "office", "text": f"We do. It's {price} a month, and right now there's {deal}."},
-        {"who": "homie", "text": "Great. The student doesn't have a Social Security Number yet. What do you accept instead?"},
-        {"who": "office", "text": f"{m['ssn_alternative']} works for us."},
-        {"who": "homie", "text": f"Perfect, so {price} a month, {deal}. Thanks so much, bye!"},
+        {"who": "office", "text": f"Thank you for calling {name}, this is {staff}, the leasing manager. How can I help you?"},
+        {"who": "homie", "text": f"Hi {staff}! I'm Homie, an AI assistant helping a student who's moving here from India. "
+                                 f"Do you have any one-bedrooms for {context.get('move_in', 'August 20th')}?"},
+        {"who": "office", "text": "Let me pull that up for you. Yeah, we've got a couple open for August."},
+        {"who": "homie", "text": "Oh perfect. What's the rent on those?"},
+        {"who": "office", "text": f"Those start at {rent} a month. {special}".strip()},
+        {"who": "homie", "text": "Nice. And when's the best time to sign to get a special?" if has_deal else "Got it. Any specials coming up?"},
+        {"who": "office", "text": when},
+        {"who": "homie", "text": "Good to know. One more thing, they don't have a Social Security Number yet. What would you need instead?"},
+        {"who": "office", "text": _spoken(f"That's fine, we see that a lot. {m['ssn_alternative']} works.")},
+        {"who": "homie", "text": f"That's super helpful. Thanks so much, {staff}!"},
+        {"who": "office", "text": "Of course, have a great day!"},
     ]
 
 
@@ -225,7 +253,7 @@ async def simulated_live_call(building: dict, purpose: str, context: dict) -> di
     result = await _mock_call(building, purpose, {**context, "_no_wait": True})
     if context.get("site_price") and purpose == "quote":
         result["price"] = context["site_price"]
-    result["summary"] = result.get("summary", "").replace("(simulated, no real call placed)", "(simulated call)")
+    result["summary"] = result.get("summary", "").replace(" (simulated, no real call placed)", " (demo)")
     return result
 
 
@@ -241,6 +269,7 @@ async def _mock_call(building: dict, purpose: str, context: dict) -> dict:
             "price": m["price"],
             "discount": m["discount"],
             "discount_day": m["discount_day"],
+            "special_when": m.get("special_when"),
             "ssn_alternative": m["ssn_alternative"],
             "fees": m["fees"],
             "payment": m["payment"],
