@@ -1,13 +1,18 @@
 certifi
+cmudict
 fastapi
 google-auth
 httpx
 openai
 pillow
+pipecat-ai[google,silero,elevenlabs]>=1.12,<2
 playwright
+protobuf>=5.29,<6
 pydantic-ai-slim[typesafe]
 python-dotenv
 relaymessenger
+relaymessenger-pipecat @ git+https://github.com/RelayMessenger/Relay-SDK@2e339167ba211dee3d705bf22c2ee5c8f58d73f8#subdirectory=python/relaymessenger-pipecat
 requests
 uagents==0.26.0
 uvicorn
+websockets

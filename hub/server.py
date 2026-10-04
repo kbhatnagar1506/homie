@@ -69,6 +69,18 @@ def dashboard():
     return FileResponse(STATIC / "dashboard.html")
 
 
+@app.get("/avatar")
+def avatar():
+    return FileResponse(STATIC / "avatar.html")
+
+
+@app.get("/api/visemes")
+def visemes(word: str, ms: float = 0):
+    from homie.lipsync import estimate_ms, timeline
+
+    return timeline(word, ms or estimate_ms(word))
+
+
 @app.get("/site")
 def site():
     return FileResponse(STATIC / "site.html")

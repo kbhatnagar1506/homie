@@ -44,6 +44,7 @@ class RelayTeam:
         self.history: dict[str, list[dict]] = {}
         self.recent: list[str] = []  # last few team-chat lines, so teammates react to each other
         self._handoffs: dict[tuple[str, str], list[str]] = {}
+        self.calls: set[asyncio.Task] = set()
 
     # ---------- setup ----------
 
@@ -222,6 +223,11 @@ class RelayTeam:
                 await self._on_message(role, data)
             elif event["event_type"] == "contact.added":
                 await self.ensure_team_chat()
+            elif event["event_type"] == "call.created" and data["call"].get("status") == "ringing" \
+                    and (data["call"].get("from") or {}).get("kind") != "agent" and role in ("fix", "homie"):
+                task = asyncio.ensure_future(self._video_call(role, data["call"]["id"], data["call"].get("chat_id")))
+                self.calls.add(task)
+                task.add_done_callback(self.calls.discard)
             self.seen.add(event["event_id"])
 
         async def on_full_sync(context) -> None:
@@ -263,6 +269,19 @@ class RelayTeam:
         images = [f"{env('PUBLIC_URL')}/shots/{n}" for n in [await screenshot(u) for u, _ in targets[:3]] if n]
         caption = await self.in_voice("pics", f"Screenshots of {', '.join(label for _, label in targets[:3])}." if images else "That page wouldn't load for me. Try another link?")
         await self.send("pics", chat_id, caption, extra=[{"type": "media", "url": u} for u in images])
+
+    async def _video_call(self, role: str, call_id: str, chat_id: str | None) -> None:
+        """Answer with the live 3D avatar; a maintenance request filed on the call goes to the Repairs agent."""
+        from homie.avatar_call import run_avatar_call
+
+        async def on_request(title: str, details: str, urgency: str) -> None:
+            self.route = ("fix", self.state["direct"].get("fix") or chat_id)
+            await self.send_to_homie(f"Repair needed: {title}. {details} (urgency: {urgency}, reported on a video call)")
+
+        try:
+            await run_avatar_call(env(TEAM[role].token_env), call_id, role, on_request)
+        except Exception as e:
+            log.exception("video call failed: %s", e)
 
     async def _memory(self, chat_id: str, text: str) -> None:
         from homie import mapi

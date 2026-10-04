@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=540, initial-scale=1">
+<title>Homie avatar</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; width:540px; height:960px; overflow:hidden; background:#111; font-family:Inter, sans-serif; }
+  #bg { position:absolute; inset:0; transition:background 1s; }
+  canvas { position:absolute; inset:0; }
+  .name { position:absolute; top:26px; left:0; right:0; text-align:center; color:rgba(255,255,255,.92); font-weight:800; font-size:26px; letter-spacing:-.02em; text-shadow:0 2px 14px rgba(0,0,0,.25); }
+  .name small { display:block; font-weight:600; font-size:13px; opacity:.75; letter-spacing:.08em; text-transform:uppercase; margin-top:2px; }
+  .live { position:absolute; top:30px; right:22px; display:flex; align-items:center; gap:6px; color:#fff; font-size:12px; font-weight:700; background:rgba(0,0,0,.25); padding:5px 10px; border-radius:99px; }
+  .live i { width:8px; height:8px; border-radius:50%; background:#ff4d4d; animation:p 1.4s infinite; }
+  @keyframes p { 50% { opacity:.35; } }
+  .caption { position:absolute; left:28px; right:28px; bottom:40px; text-align:center; color:#fff; font-size:22px; font-weight:600; line-height:1.3; text-shadow:0 2px 12px rgba(0,0,0,.45); min-height:58px; }
+  .caption span { opacity:.45; transition:opacity .15s; } .caption span.on { opacity:1; }
+  .ticket { position:absolute; left:26px; right:26px; bottom:120px; background:rgba(255,255,255,.94); border-radius:20px; padding:18px 20px; box-shadow:0 20px 60px rgba(0,0,0,.3); transform:translateY(30px) scale(.96); opacity:0; transition:all .45s cubic-bezier(.2,.9,.3,1.2); }
+  .ticket.show { transform:none; opacity:1; }
+  .ticket .hd { display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#666; }
+  .ticket .st { padding:3px 9px; border-radius:99px; background:#fff3cd; color:#8a6100; letter-spacing:0; text-transform:none; font-weight:700; }
+  .ticket .st.sent { background:#d4f5e2; color:#137a3d; }
+  .ticket .title { font-size:20px; font-weight:800; color:#151515; margin:8px 0 6px; }
+  .ticket .body { font:15px/1.5 "JetBrains Mono", monospace; color:#333; white-space:pre-wrap; min-height:44px; }
+  .ticket .cursor { display:inline-block; width:8px; height:17px; background:#333; vertical-align:-3px; animation:p 1s infinite; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div class="name"><span id="who">Homie Fix</span><small id="role">maintenance</small></div>
+<div class="live"><i></i>LIVE</div>
+<div class="ticket" id="ticket"><div class="hd"><span id="tnum">Maintenance request</span><span class="st" id="tst">typing…</span></div><div class="title" id="ttitle"></div><div class="body" id="tbody"></div></div>
+<div class="caption" id="caption"></div>
+<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
+<script type="module">
+import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+
+const W = 540, H = 960;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H); renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.insertBefore(renderer.domElement, document.getElementById("ticket"));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 100);
+camera.position.set(0, 0.05, 13.2); camera.lookAt(0, -0.1, 0);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd9c6b8, 1.25));
+const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 5, 6); scene.add(key);
+const rim = new THREE.DirectionalLight(0xffffff, 1.1); rim.position.set(-4, 2, -3); scene.add(rim);
+
+const clay = (c, rough = 0.85) => new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: 0 });
+const ROLES = {
+  fix:    { name: "Homie Fix", role: "maintenance", body: 0x9fd8e8, roof: 0xf2a7b5, bg: ["#7fe0b0", "#2fae6f"], prop: "wrench" },
+  homie:  { name: "Homie", role: "your person in America", body: 0xf5dcc0, roof: 0x8fb8e8, bg: ["#ffb27d", "#e8693a"], prop: "key" },
+  calls:  { name: "Homie Calls", role: "phone & offers", body: 0xb9e6c8, roof: 0xf2a7a0, bg: ["#8dcbff", "#3b8fe0"], prop: "none" },
+  papers: { name: "Homie Papers", role: "paperwork", body: 0xbfe0ef, roof: 0xf5c9a5, bg: ["#c3b0ff", "#7a5ce0"], prop: "none" },
+};
+
+// ---------- the character: a little clay house ----------
+const rig = new THREE.Group(); scene.add(rig);
+const head = new THREE.Group(); rig.add(head);
+const body = new THREE.Mesh(new RoundedBoxGeometry(2.6, 2.4, 2.1, 6, 0.45), clay(0xf5dcc0)); body.position.y = -0.2; head.add(body);
+const roofGeo = new THREE.CylinderGeometry(0.0, 1.0, 1.0, 4, 1); roofGeo.rotateY(Math.PI / 4);
+const roof = new THREE.Mesh(roofGeo, clay(0x8fb8e8)); roof.scale.set(2.25, 1.15, 1.9); roof.position.y = 1.45; head.add(roof);
+const chimney = new THREE.Mesh(new RoundedBoxGeometry(0.36, 0.6, 0.36, 3, 0.08), clay(0xd98c7a)); chimney.position.set(0.75, 1.75, -0.2); head.add(chimney);
+
+const face = new THREE.Group(); face.position.z = 1.06; head.add(face);
+const eyeMat = clay(0x1d1b1f, 0.35);
+const mkEye = x => { const g = new THREE.Group(); const e = new THREE.Mesh(new THREE.SphereGeometry(0.16, 24, 16), eyeMat); e.scale.z = 0.5; g.add(e);
+  const shine = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff })); shine.position.set(0.05, 0.06, 0.07); g.add(shine);
+  g.position.set(x, 0.18, 0.02); face.add(g); return g; };
+const eyeL = mkEye(-0.55), eyeR = mkEye(0.55);
+const browMat = clay(0x6b4a3a, 0.7);
+const mkBrow = x => { const b = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.28, 4, 8), browMat); b.rotation.z = Math.PI / 2; b.position.set(x, 0.52, 0.02); face.add(b); return b; };
+const browL = mkBrow(-0.55), browR = mkBrow(0.55);
+const cheekMat = new THREE.MeshStandardMaterial({ color: 0xff8f9e, roughness: 0.9, transparent: true, opacity: 0.55 });
+const mkCheek = x => { const c = new THREE.Mesh(new THREE.CircleGeometry(0.2, 24), cheekMat); c.position.set(x, -0.08, 0.03); face.add(c); return c; };
+mkCheek(-0.92); mkCheek(0.92);
+
+// mouth: dark rounded opening + tongue + upper teeth, shaped by (open, wide, round)
+const mouth = new THREE.Group(); mouth.position.set(0, -0.32, 0.03); face.add(mouth);
+const mouthIn = new THREE.Mesh(new THREE.CircleGeometry(0.5, 40), new THREE.MeshBasicMaterial({ color: 0x3a1a20 })); mouth.add(mouthIn);
+const tongue = new THREE.Mesh(new THREE.CircleGeometry(0.32, 30), new THREE.MeshBasicMaterial({ color: 0xe0606f })); tongue.position.set(0, -0.2, 0.002); mouth.add(tongue);
+const teeth = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.12), new THREE.MeshBasicMaterial({ color: 0xfdfaf5 })); teeth.position.set(0, 0.36, 0.003); mouth.add(teeth);
+const lipMat = clay(0xc96e72, 0.6);
+const lips = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.06, 10, 48), lipMat); lips.position.z = 0.01; mouth.add(lips);
+const mask = new THREE.Mesh(new THREE.RingGeometry(0.5, 1.2, 48), new THREE.MeshBasicMaterial({ visible: false })); mouth.add(mask);
+
+// arms + prop
+const armMat = clay(0xf5dcc0);
+const mkArm = x => { const a = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.55, 6, 12), armMat); a.position.set(x, -0.55, 0.35); a.rotation.z = x > 0 ? -0.5 : 0.5; rig.add(a); return a; };
+const armL = mkArm(-1.55), armR = mkArm(1.55);
+const wrench = new THREE.Group();
+{ const m = clay(0xb8bec7, 0.35); const shaft = new THREE.Mesh(new RoundedBoxGeometry(0.16, 1.1, 0.1, 2, 0.04), m); wrench.add(shaft);
+  const jaw = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.08, 8, 20, Math.PI * 1.5), m); jaw.position.y = 0.65; jaw.rotation.z = Math.PI * 0.75; wrench.add(jaw); }
+wrench.position.set(1.72, -0.2, 0.7); wrench.rotation.z = -0.35; rig.add(wrench);
+const keyProp = new THREE.Group();
+{ const m = clay(0xe8b84a, 0.3); const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.07, 10, 24), m); ring.position.y = 0.55; keyProp.add(ring);
+  const stem = new THREE.Mesh(new RoundedBoxGeometry(0.12, 0.8, 0.08, 2, 0.03), m); keyProp.add(stem); }
+keyProp.position.set(1.72, -0.2, 0.7); keyProp.rotation.z = -0.4; rig.add(keyProp);
+const legMat = clay(0xf5dcc0);
+[-0.6, 0.6].forEach(x => { const l = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.35, 6, 12), legMat); l.position.set(x, -1.9, 0.1); rig.add(l); });
+
+// ---------- visemes (open, wide, round) ----------
+const VIS = {
+  sil: [0.02, 0.55, 0.0], PP: [0.0, 0.5, 0.05], FF: [0.1, 0.6, 0.0], TH: [0.16, 0.58, 0.0], DD: [0.26, 0.55, 0.0],
+  kk: [0.32, 0.52, 0.0], CH: [0.24, 0.38, 0.55], SS: [0.12, 0.7, 0.0], nn: [0.2, 0.55, 0.0], RR: [0.26, 0.42, 0.45],
+  aa: [0.9, 0.6, 0.0], E: [0.52, 0.78, 0.0], I: [0.34, 0.85, 0.0], O: [0.68, 0.38, 0.85], U: [0.36, 0.26, 1.0],
+};
+let target = VIS.sil.slice(), cur = VIS.sil.slice(), queue = [], speaking = false, emotion = "calm", emoTarget = {}, lastSpoke = 0;
+const EMO = {
+  calm:      { brow: 0.0, browTilt: 0.0,  cheek: 0.5, bounce: 0.6, smile: 0.25, look: [0, 0] },
+  happy:     { brow: 0.08, browTilt: 0.0, cheek: 0.85, bounce: 1.0, smile: 0.6, look: [0, 0] },
+  excited:   { brow: 0.16, browTilt: 0.0, cheek: 0.95, bounce: 1.8, smile: 0.8, look: [0, 0.03] },
+  concerned: { brow: 0.02, browTilt: 0.32, cheek: 0.35, bounce: 0.4, smile: -0.25, look: [0, -0.02] },
+  thinking:  { brow: 0.1, browTilt: -0.15, cheek: 0.45, bounce: 0.3, smile: 0.05, look: [0.06, 0.05] },
+};
+let emo = { ...EMO.calm };
+
+window.homie = {
+  role(name) { const r = ROLES[name] || ROLES.fix; document.getElementById("who").textContent = r.name; document.getElementById("role").textContent = r.role;
+    body.material.color.set(r.body); armMat.color.set(r.body); legMat.color.set(r.body); roof.material.color.set(r.roof);
+    document.getElementById("bg").style.background = `radial-gradient(120% 80% at 50% 30%, ${r.bg[0]}, ${r.bg[1]})`;
+    wrench.visible = r.prop === "wrench"; keyProp.visible = r.prop === "key"; },
+  // one spoken word: viseme keyframes [{v, ms}] played now
+  word(text, frames) { queue.push(...frames); speaking = true; lastSpoke = performance.now();
+    const cap = document.getElementById("caption"); const spans = cap.querySelectorAll("span");
+    if (spans.length > 9) cap.innerHTML = ""; const s = document.createElement("span"); s.className = "on"; s.textContent = text + " "; cap.appendChild(s);
+    setTimeout(() => s.classList.remove("on"), 900); },
+  stop() { queue = []; target = VIS.sil.slice(); speaking = false; setTimeout(() => { if (!speaking) document.getElementById("caption").innerHTML = ""; }, 2500); },
+  emotion(name) { if (EMO[name]) emotion = name; },
+  ticket(title, text, status) { const t = document.getElementById("ticket"); t.classList.add("show"); document.getElementById("ttitle").textContent = title;
+    const body = document.getElementById("tbody"); body.innerHTML = ""; let i = 0; const cursor = '<span class="cursor"></span>';
+    const st = document.getElementById("tst"); st.textContent = "typing…"; st.className = "st";
+    clearInterval(window._typer); window._typer = setInterval(() => { i += 1 + (Math.random() < 0.3 ? 1 : 0); body.innerHTML = text.slice(0, i).replace(/[<&]/g, c => c === "<" ? "&lt;" : "&amp;") + cursor;
+      if (i >= text.length) { clearInterval(window._typer); body.innerHTML = text; if (status) homie.ticketStatus(status); } }, 38); },
+  ticketStatus(s, num) { const st = document.getElementById("tst"); st.textContent = s; st.className = "st" + (/sent|booked|filed/i.test(s) ? " sent" : "");
+    if (num) document.getElementById("tnum").textContent = "Maintenance request · " + num; },
+  hideTicket() { document.getElementById("ticket").classList.remove("show"); },
+};
+
+// ---------- animation loop ----------
+let frameStart = 0, blinkAt = performance.now() + 2500;
+const clock = new THREE.Clock();
+function tick(now) {
+  const t = clock.getElapsedTime();
+  // viseme playback
+  if (queue.length) {
+    if (!frameStart) frameStart = now;
+    const head0 = queue[0];
+    target = VIS[head0.v] || VIS.nn;
+    if (now - frameStart >= head0.ms) { queue.shift(); frameStart = now; }
+  } else if (speaking && now - lastSpoke > 450) { target = VIS.sil.slice(); }
+  const k = queue.length ? 0.45 : 0.2;
+  for (let i = 0; i < 3; i++) cur[i] += (target[i] - cur[i]) * k;
+  // emotions ease
+  const e = EMO[emotion];
+  for (const key2 of ["brow", "browTilt", "cheek", "bounce", "smile"]) emo[key2] += (e[key2] - emo[key2]) * 0.06;
+  emo.look = [emo.look[0] + (e.look[0] - emo.look[0]) * 0.05, emo.look[1] + (e.look[1] - emo.look[1]) * 0.05];
+  // mouth shape
+  const [open, wide, round] = cur;
+  const sx = 0.32 + wide * 0.42 - round * 0.12, sy = 0.06 + open * 0.42 + round * 0.12;
+  mouth.scale.set(sx, sy, 1);
+  lips.scale.set(1, 1, 1); lips.material.color.setHSL(0.98, 0.45, 0.55 - open * 0.05);
+  teeth.visible = open > 0.18 && round < 0.6; teeth.scale.x = Math.min(1, wide * 1.1);
+  tongue.visible = open > 0.3;
+  mouth.position.y = -0.32 - open * 0.06 + emo.smile * 0.03;
+  mouth.rotation.z = 0;
+  // smile curve: squash the mouth wider at rest when happy
+  if (!queue.length) { mouth.scale.x += emo.smile * 0.12; mouth.scale.y = Math.max(0.05, mouth.scale.y - emo.smile * 0.03); }
+  // blink
+  let lid = 1;
+  if (now > blinkAt) { const p = (now - blinkAt) / 140; lid = p < 1 ? 1 - Math.sin(p * Math.PI) : 1; if (p >= 1) blinkAt = now + 1800 + Math.random() * 3200; }
+  eyeL.scale.y = eyeR.scale.y = Math.max(0.08, lid * (emotion === "happy" || emotion === "excited" ? 0.82 : 1));
+  // eyes look + brows
+  eyeL.position.x = -0.55 + emo.look[0]; eyeR.position.x = 0.55 + emo.look[0]; eyeL.position.y = eyeR.position.y = 0.18 + emo.look[1];
+  browL.position.y = browR.position.y = 0.52 + emo.brow + (queue.length ? open * 0.05 : 0);
+  browL.rotation.z = Math.PI / 2 - emo.browTilt; browR.rotation.z = Math.PI / 2 + emo.browTilt;
+  cheekMat.opacity = 0.25 + emo.cheek * 0.5;
+  // body life: breathing, bob, talking nods, sway
+  const talk = queue.length ? 1 : 0;
+  rig.position.y = Math.sin(t * 2.1) * 0.04 * emo.bounce + Math.abs(Math.sin(t * 7)) * 0.05 * talk * emo.bounce;
+  head.rotation.z = Math.sin(t * 0.9) * 0.035 + talk * Math.sin(t * 3.3) * 0.025;
+  head.rotation.y = Math.sin(t * 0.6) * 0.08 + emo.look[0] * 1.5;
+  head.rotation.x = Math.sin(t * 1.3) * 0.02 - talk * open * 0.06;
+  armR.rotation.z = -0.5 + Math.sin(t * 2.4) * 0.06 + talk * Math.sin(t * 5) * 0.12;
+  wrench.rotation.z = -0.35 + Math.sin(t * 2.4) * 0.06 + talk * Math.sin(t * 5) * 0.1; keyProp.rotation.z = wrench.rotation.z - 0.05;
+  armL.rotation.z = 0.5 - Math.sin(t * 2.2) * 0.05;
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+homie.role(new URLSearchParams(location.search).get("role") || "fix");
+requestAnimationFrame(tick);
+window.homieReady = true;
+
+// demo: /avatar?demo=1 speaks a line so you can see the lip sync without a call
+if (new URLSearchParams(location.search).get("demo")) {
+  const line = "Hey Krishna! Sorry your ice maker broke. Tell me what happened and I'll file it right now.".split(" ");
+  let i = 0; homie.emotion("happy");
+  setInterval(() => { if (i >= line.length) { homie.stop(); i = -8; homie.ticket("Ice maker not working", "Unit: your apartment\nIssue: ice maker stopped dispensing\nWhen: since this morning\nAccess: anytime, pet-free", "sent to office"); }
+    if (i >= 0 && i < line.length) { const w = line[i]; fetch("/api/visemes?word=" + encodeURIComponent(w) + "&ms=310").then(r => r.json()).then(f => homie.word(w, f)); }
+    i++; if (i > line.length + 30) { i = 0; homie.hideTicket(); } }, 330);
+}
+</script>
+</body>
+</html>
