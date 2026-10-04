@@ -26,7 +26,7 @@ from uagents_core.contrib.protocols.payment import (
     payment_protocol_spec,
 )
 
-from agents.specialists import caller, later, memory, scout, negotiator, paperwork, pictures, policy, repairs
+from agents.specialists import caller, later, memory, scout, vibecheck, negotiator, paperwork, pictures, policy, repairs
 from homie import hub_client as hub
 from homie import mapi
 from homie.config import PUBLIC_URL, ROOT, env, seed
@@ -45,6 +45,10 @@ from homie.models import (
     PaperworkRequest,
     PaperworkResult,
     ScoutRequest,
+    VibeDeck,
+    VibeRequest,
+    VibeResult,
+    VibeWait,
     ScoutResult,
     ScheduleRequest,
     ScheduleResult,
@@ -246,19 +250,23 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
               + f"{f' under ${budget}' if budget else ''}{', no SSN' if req.get('no_ssn') else ''}. You can go to sleep.")
 
     # 0. Scout reads every building's website first: live prices, specials, office hours, no-SSN rules.
+    await hub.step("find", "done", f"{len(BUILDINGS)} buildings in {area}")
     await hub.step("offers", "active", f"Scout is reading {len(BUILDINGS)} websites")
-    site_prices = await scout_all(ctx, beds)
+    site: dict = {}
+    site_prices = await scout_all(ctx, beds, site)
     if site_prices:
         cheapest = min(site_prices, key=lambda p: p["price"])
-        team_post("calls", f"Scout read {len(site_prices)} building websites before we dial. Cheapest {label} online: "
-                           f"{BUILDINGS[cheapest['building_id']]['name']} at ${cheapest['price']}{' per bed' if cheapest.get('per_bed') else ''}. Calling to beat it.")
+        team_post("calls", f"Scout read {len(site)} building websites. Cheapest {label} online: "
+                           f"{BUILDINGS[cheapest['building_id']]['name']} at ${cheapest['price']}{' per bed' if cheapest.get('per_bed') else ''}.")
 
-    # 1. Call every building at once (Caller agent).
-    await hub.step("find", "done", f"{len(BUILDINGS)} buildings in {area}")
-    await hub.step("offers", "active", "Calling every building at once")
+    # 1. Vibe check: the renter swipes left/right on what Scout found; only the ones they like go forward.
+    liked = await vibe_check(ctx, sender, req, site)
+
+    # 2. Call the liked buildings whose offices are open right now (Caller agent).
+    await hub.step("offers", "active", f"Calling {len(liked)} buildings you liked")
     replies = await asyncio.gather(*(
         ask(ctx, caller.address, CallRequest(building_id=b, purpose="quote", context={"move_in": req.get("move_in") or "August 20"}), CALL_TIMEOUT)
-        for b in BUILDINGS
+        for b in liked
     ))
     offers = []
     for reply in replies:
@@ -266,15 +274,72 @@ async def handle_search(ctx: Context, sender: str, req: dict) -> None:
             offers.append(reply.dict())
     if budget:
         offers = [o for o in offers if o["price"] <= budget] or offers
-    unanswered = [b for b, r in zip(BUILDINGS, replies) if not (isinstance(r, CallResult) and r.answered)
+    unanswered = [b for b, r in zip(liked, replies) if not (isinstance(r, CallResult) and r.answered)
                   or "call back" in (r.summary or "").lower()]
     await hub.log_event(f"Calling session over: {len(offers)} offers, {len(unanswered)} offices to call back")
     if not offers:
-        await recover_without_calls(ctx, sender, req, unanswered, label)
+        # Sunday, or nobody picked up: decide from Scout's live website prices, and Later locks it in when they open.
+        if any(site.get(b, {}).get("price") for b in liked):
+            await decide_from_sites(ctx, sender, req, liked, site, label)
+        else:
+            await recover_without_calls(ctx, sender, req, unanswered or liked, label)
         return
     if unanswered:
         await schedule_retry(ctx, sender, req, unanswered, target=min(o["price"] for o in offers))
     await run_offers(ctx, sender, req, offers)
+
+
+async def vibe_check(ctx: Context, sender: str, req: dict, site: dict) -> list[str]:
+    """Send the swipe link (ASI:One and Relay), wait for the swipes, return the buildings they liked."""
+    ids = [b for b in BUILDINGS if site.get(b) or BUILDINGS[b].get("website")]
+    if not ids:
+        return list(BUILDINGS)
+    await hub.step("negotiate", "active", "Vibe check: waiting for your swipes")
+    deck = await ask(ctx, vibecheck.address, VibeRequest(building_ids=ids, beds=req.get("beds"), budget=req.get("max_rent"), site=site), 90)
+    if not isinstance(deck, VibeDeck):
+        return list(BUILDINGS)
+    await say(ctx, sender, f"Vibe check time ✨ Scout found {deck.cards} places. Swipe right on the ones you'd live in, left on the rest, "
+                           f"and I'll go after only the ones you like:\n{deck.url}")
+    res = await ask(ctx, vibecheck.address, VibeWait(deck_id=deck.deck_id, wait_seconds=int(env("VIBE_WAIT_SECONDS", "900"))), int(env("VIBE_WAIT_SECONDS", "900")) + 60)
+    if not isinstance(res, VibeResult) or not (res.liked or res.passed):
+        await say(ctx, sender, "No swipes yet, so I'll keep every building in play for now.")
+        return ids
+    if not res.liked:
+        await say(ctx, sender, "You passed on all of them. I'll keep the two cheapest in play anyway, and look wider next time.")
+        priced = sorted((b for b in ids if site.get(b, {}).get("price")), key=lambda b: site[b]["price"])
+        return priced[:2] or ids[:2]
+    names = ", ".join(BUILDINGS[b]["name"] for b in res.liked if b in BUILDINGS)
+    await say(ctx, sender, f"Love it. {res.taste + ' ' if res.taste else ''}Going after {names}.")
+    await hub.step("negotiate", "done", f"You liked {len(res.liked)}")
+    return [b for b in res.liked if b in BUILDINGS]
+
+
+async def decide_from_sites(ctx: Context, sender: str, req: dict, liked: list[str], site: dict, label: str) -> None:
+    """Make the call even when every office is closed: rank the liked buildings on Scout's live prices, plan, and let Later lock it in."""
+    budget = req.get("max_rent")
+    ranked = sorted((b for b in liked if site.get(b, {}).get("price")), key=lambda b: site[b]["price"])
+    fits = [b for b in ranked if not budget or site[b]["price"] <= budget] or ranked
+    best = fits[0]
+    b, info = BUILDINGS[best], site[best]
+    when = await schedule_retry(ctx, sender, req, liked, target=info["price"])
+    pw = await ask(ctx, paperwork.address, PaperworkRequest(building_id=best, ssn_alternative=info.get("intl") or "Passport, I-20 and proof of funds (Homie will confirm with the office)",
+                                                            move_in=req.get("move_in")), 60)
+    ctx.storage.set(f"target:{sender}", {"building_id": best, "price": info["price"]})
+    await hub.offer(best, status="top pick", price=info["price"], discount=info.get("special") or "")
+    await hub.step("offers", "done", f"Top pick: {b['name']} ${info['price']}")
+    await hub.step("held", "todo", f"Locking it in {human(when)}")
+    lines = "\n".join(f"- {BUILDINGS[x]['name']}: ${site[x]['price']}{' per bed' if site[x].get('per_bed') else ''}"
+                      + (f" ({site[x]['special']})" if site[x].get("special") else "") for x in fits[:5])
+    await mapi.remember(f"Homie's top pick from their vibe check: {b['name']} at ${info['price']}/mo for a {label}. Calling {human(when)} to lock it in.",
+                        tags=["activity", "homie"], source="homie")
+    await say(ctx, sender,
+              f"Decided ✅ Your top pick is {b['name']} at ${info['price']}/mo{' per bed' if info.get('per_bed') else ''}"
+              + (f", {info['special']}" if info.get("special") else "") + ".\n"
+              f"Your likes, ranked by live price:\n{lines}\n"
+              + (f"No SSN: {', '.join(pw.documents)}\n" if isinstance(pw, PaperworkResult) else "")
+              + f"Offices are closed right now, so Homie Later calls all of them {human(when)}: {b['name']} to hold ${info['price']}, "
+                f"and the rest to beat it. I'll message you the moment there's an offer.",
+              end=True)
 
 
 async def handle_building(ctx: Context, sender: str, req: dict, url: str) -> None:
@@ -373,22 +438,26 @@ async def handle_building(ctx: Context, sender: str, req: dict, url: str) -> Non
     await say(ctx, sender, summary, end=True)
 
 
-async def scout_all(ctx: Context, beds: int | None) -> list[dict]:
+async def scout_all(ctx: Context, beds: int | None, site: dict | None = None) -> list[dict]:
     """Scout reads every building's site in parallel (4 at a time) and posts what it finds to mission control."""
     gate = asyncio.Semaphore(int(env("SCOUT_PARALLEL", "4")))
     found: list[dict] = []
+    site = site if site is not None else {}
 
     async def one(bid: str) -> None:
         b = BUILDINGS[bid]
         if not b.get("website"):
             return
         async with gate:
-            res = await ask(ctx, scout.address, ScoutRequest(building_id=bid, url=b["website"], beds=beds, max_pages=4), 150)
+            res = await ask(ctx, scout.address, ScoutRequest(building_id=bid, url=b["website"], beds=beds, max_pages=6), 150)
         if not isinstance(res, ScoutResult):
             return
         facts = res.facts or {}
         plans = [p for p in (facts.get("floor_plans") or []) if p.get("price") and (beds is None or p.get("beds") == beds)]
         best = min(plans, key=lambda p: p["price"]) if plans else None
+        site[bid] = {"price": best["price"] if best else None, "per_bed": bool(best and best.get("per_bed")), "special": facts.get("specials") or "",
+                     "shots": list(res.shots or []), "hours": facts.get("office_hours") or "", "intl": facts.get("international_or_no_ssn") or "",
+                     "amenities": facts.get("amenities") or "", "notes": facts.get("notes") or ""}
         await hub.offer(bid, site_price=best["price"] if best else None, site_special=facts.get("specials") or None,
                         site_hours=facts.get("office_hours") or None, status="site read" + (f" · from ${best['price']}" if best else ""))
         if best:
@@ -700,6 +769,8 @@ async def resume_retries(ctx: Context):
 @homie.on_message(MemoryResult)
 @homie.on_message(ScheduleResult)
 @homie.on_message(ScoutResult)
+@homie.on_message(VibeDeck)
+@homie.on_message(VibeResult)
 async def on_specialist_reply(ctx: Context, sender: str, msg):
     resolve(msg)
 

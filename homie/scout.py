@@ -9,7 +9,7 @@ from homie.llm import complete_json
 from homie.screenshots import SHOTS
 
 log = logging.getLogger("homie.scout")
-KEYWORDS = re.compile(r"floor ?plans?|apartments?/|availability|pricing|rates|amenit|faq|fees?|pet|parking|special|apply|lease|resident|policy|international", re.I)
+KEYWORDS = re.compile(r"floor ?plans?|apartments?/|availability|pricing|rates|amenit|gallery|photos|faq|fees?|pet|parking|special|apply|lease|resident|policy|international", re.I)
 
 FACTS = """You read the pages of an apartment building's website. Extract JSON with keys:
 name, address, phone, office_hours (string), floor_plans (list of {name, beds (int, 0 studio), baths, sqft (string),
@@ -40,7 +40,7 @@ async def crawl(url: str, max_pages: int = 8) -> dict:
                 await page.wait_for_timeout(2200)
                 body = await page.inner_text("body")
                 texts.append(f"=== {target}\n{body[:7000]}")
-                if len(shots) < 3 and (target == url or re.search(r"floor|apartments?/|availability|pricing", target, re.I)):
+                if len(shots) < 5 and (target == url or re.search(r"floor|apartments?/|availability|pricing|gallery|photos|amenit|tour|interior", target, re.I)):
                     name = f"{uuid.uuid4().hex[:12]}.png"
                     await page.screenshot(path=str(SHOTS / name))
                     shots.append(name)

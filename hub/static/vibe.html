@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>Vibe Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #07080c; --card: #10131a; --ink: #f2f5f9; --dim: #8a94a6; --line: rgba(255,255,255,.08);
+    --like: #2bff9a; --nope: #ff4d6d; --accent: #8b7bff; --chip: rgba(255,255,255,.07);
+  }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #07080c; } }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; overflow: hidden; overscroll-behavior: none; }
+  body::before { content: ""; position: fixed; inset: -20%; background: radial-gradient(40% 35% at 20% 10%, rgba(139,123,255,.18), transparent 70%),
+                 radial-gradient(35% 30% at 85% 90%, rgba(43,255,154,.10), transparent 70%); pointer-events: none; }
+  .app { position: relative; height: 100%; max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; padding: max(14px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; gap: 10px; padding: 4px 2px 12px; }
+  header img { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: -.01em; }
+  header small { display: block; color: var(--dim); font-size: 12px; margin-top: 1px; }
+  header .count { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--dim); }
+  .deck { position: relative; flex: 1; min-height: 0; }
+  .card { position: absolute; inset: 0; border-radius: 22px; background: var(--card); border: 1px solid var(--line); overflow: hidden;
+          box-shadow: 0 20px 60px rgba(0,0,0,.55); touch-action: none; user-select: none; will-change: transform; display: flex; flex-direction: column; }
+  .card.anim { transition: transform .38s cubic-bezier(.2,.8,.2,1), opacity .38s; }
+  .card .pic { position: relative; flex: 1; min-height: 0; background: #151924 center top / cover no-repeat; }
+  .card .pic::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(10,12,18,.92) 100%); }
+  .card .pic .noimg { position: absolute; inset: 0; display: grid; place-items: center; font-size: 64px; opacity: .5; }
+  .card .dots { position: absolute; top: 10px; left: 12px; right: 12px; display: flex; gap: 4px; z-index: 2; }
+  .card .dots i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.3); }
+  .card .dots i.on { background: #fff; }
+  .card .over { position: absolute; left: 18px; right: 18px; bottom: 14px; z-index: 2; }
+  .card h2 { margin: 0; font-size: 26px; line-height: 1.1; letter-spacing: -.02em; text-shadow: 0 2px 12px rgba(0,0,0,.6); }
+  .card .addr { color: rgba(255,255,255,.75); font-size: 13px; margin-top: 4px; }
+  .card .info { padding: 14px 18px 18px; }
+  .price { display: flex; align-items: baseline; gap: 8px; }
+  .price b { font-size: 24px; letter-spacing: -.02em; }
+  .price span { color: var(--dim); font-size: 13px; }
+  .price .over { color: var(--nope); font-size: 12px; font-weight: 600; }
+  .special { display: inline-block; margin-top: 8px; padding: 5px 10px; border-radius: 999px; background: rgba(43,255,154,.12); color: var(--like); font-size: 12.5px; font-weight: 600; }
+  .vibe { margin: 10px 0 0; font-size: 15px; line-height: 1.4; color: #dfe5ee; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .tags span { padding: 5px 10px; border-radius: 999px; background: var(--chip); font-size: 12px; color: #cfd6e2; }
+  .meta { margin-top: 10px; font-size: 12px; color: var(--dim); display: flex; gap: 12px; }
+  .meta a { color: var(--dim); }
+  .stamp { position: absolute; top: 34px; z-index: 3; padding: 6px 14px; border: 4px solid; border-radius: 10px; font-weight: 800; font-size: 30px;
+           letter-spacing: .06em; opacity: 0; pointer-events: none; }
+  .stamp.like { left: 22px; color: var(--like); border-color: var(--like); transform: rotate(-14deg); }
+  .stamp.nope { right: 22px; color: var(--nope); border-color: var(--nope); transform: rotate(14deg); }
+  .actions { display: flex; justify-content: center; align-items: center; gap: 26px; padding-top: 16px; }
+  .actions button { width: 66px; height: 66px; border-radius: 50%; border: 1px solid var(--line); background: #11141c; font-size: 28px; cursor: pointer;
+                    display: grid; place-items: center; transition: transform .15s, box-shadow .15s; }
+  .actions button:active { transform: scale(.92); }
+  .actions .no { color: var(--nope); box-shadow: 0 0 0 1px rgba(255,77,109,.25), 0 10px 30px rgba(255,77,109,.15); }
+  .actions .yes { color: var(--like); box-shadow: 0 0 0 1px rgba(43,255,154,.25), 0 10px 30px rgba(43,255,154,.15); }
+  .actions .undo { width: 46px; height: 46px; font-size: 18px; color: var(--dim); }
+  .hint { text-align: center; color: var(--dim); font-size: 12px; margin-top: 10px; }
+  .done { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+  .done.show { display: flex; }
+  .done .big { font-size: 56px; }
+  .done h2 { margin: 10px 0 6px; font-size: 24px; }
+  .done p { color: var(--dim); margin: 0 0 18px; line-height: 1.5; }
+  .done ul { list-style: none; padding: 0; margin: 0; width: 100%; }
+  .done li { display: flex; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; background: var(--card); font-size: 14px; }
+  .done li b { color: var(--like); }
+  .err { color: var(--dim); text-align: center; margin-top: 30vh; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <img src="/avatars/vibecheck.png" alt="" onerror="this.src='/avatars/homie.png'" />
+    <div><h1>Vibe Check</h1><small>Swipe right on places you'd live</small></div>
+    <span class="count" id="count"></span>
+  </header>
+  <div class="deck" id="deck"></div>
+  <div class="actions" id="actions">
+    <button class="no" id="no" aria-label="Pass">✕</button>
+    <button class="undo" id="undo" aria-label="Undo">↺</button>
+    <button class="yes" id="yes" aria-label="Like">♥</button>
+  </div>
+  <div class="hint" id="hint">Drag the card, tap the buttons, or use ← →</div>
+  <div class="done" id="done"></div>
+</div>
+<script>
+const deckId = location.pathname.split("/").pop();
+const deckEl = document.getElementById("deck");
+let cards = [], i = 0, history = [], swipes = {};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function load() {
+  const r = await fetch(`/api/vibe/${deckId}`);
+  if (!r.ok) { deckEl.innerHTML = `<div class="err">This vibe check has expired. Ask Homie for a new one.</div>`; document.getElementById("actions").style.display = "none"; return; }
+  const d = await r.json();
+  cards = d.cards; swipes = d.swipes || {};
+  i = cards.findIndex(c => !swipes[c.building_id]); if (i < 0) i = cards.length;
+  render();
+}
+
+function cardHtml(c) {
+  const shots = c.shots || [], img = shots[0];
+  const price = c.price ? `<b>$${Number(c.price).toLocaleString()}</b><span>/mo${c.per_bed ? " per bed" : ""} · ${c.beds === 0 ? "studio" : (c.beds || 1) + " bed"} · live on their site</span>${c.over_budget ? `<span class="over">over budget</span>` : ""}`
+                        : `<b style="font-size:17px">Price on request</b><span>Homie will ask the office</span>`;
+  return `<div class="pic" style="${img ? `background-image:url('${esc(img)}')` : ""}">${img ? "" : `<div class="noimg">🏙️</div>`}
+      ${shots.length > 1 ? `<div class="dots">${shots.map((_, k) => `<i class="${k ? "" : "on"}"></i>`).join("")}</div>` : ""}
+      <div class="over"><h2>${esc(c.name)}</h2><div class="addr">${esc(c.address || "")}</div></div></div>
+    <div class="info">
+      <div class="price">${price}</div>
+      ${c.special ? `<div class="special">🎁 ${esc(c.special)}</div>` : ""}
+      ${c.vibe ? `<p class="vibe">${esc(c.vibe)}</p>` : ""}
+      ${(c.tags || []).length ? `<div class="tags">${c.tags.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
+      <div class="meta">${c.rating ? `<span>★ ${esc(c.rating)} on Google</span>` : ""}${c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener">website ↗</a>` : ""}</div>
+    </div>
+    <div class="stamp like">LIKE</div><div class="stamp nope">NOPE</div>`;
+}
+
+function render() {
+  deckEl.innerHTML = "";
+  document.getElementById("count").textContent = cards.length ? `${Math.min(i + 1, cards.length)}/${cards.length}` : "";
+  if (i >= cards.length) return finish();
+  for (let k = Math.min(cards.length - 1, i + 2); k >= i; k--) {
+    const el = document.createElement("div");
+    el.className = "card"; el.innerHTML = cardHtml(cards[k]);
+    const depth = k - i;
+    el.style.transform = `translateY(${depth * 10}px) scale(${1 - depth * 0.04})`;
+    el.style.opacity = depth > 1 ? 0 : 1;
+    if (depth === 0) drag(el, cards[k]);
+    if (depth === 0 && (cards[k].shots || []).length > 1) el.querySelector(".pic").onclick = e => cycle(el, cards[k]);
+    deckEl.appendChild(el);
+  }
+}
+
+function cycle(el, c) {
+  el._shot = ((el._shot || 0) + 1) % c.shots.length;
+  el.querySelector(".pic").style.backgroundImage = `url('${c.shots[el._shot]}')`;
+  el.querySelectorAll(".dots i").forEach((d, k) => d.classList.toggle("on", k === el._shot));
+}
+
+function drag(el, c) {
+  let x0 = 0, y0 = 0, dx = 0, dy = 0, down = false, moved = false;
+  const like = el.querySelector(".stamp.like"), nope = el.querySelector(".stamp.nope");
+  el.addEventListener("pointerdown", e => { down = true; moved = false; x0 = e.clientX; y0 = e.clientY; el.setPointerCapture(e.pointerId); el.classList.remove("anim"); });
+  el.addEventListener("pointermove", e => {
+    if (!down) return;
+    dx = e.clientX - x0; dy = e.clientY - y0; if (Math.abs(dx) > 6) moved = true;
+    el.style.transform = `translate(${dx}px, ${dy * 0.4}px) rotate(${dx / 18}deg)`;
+    like.style.opacity = Math.max(0, Math.min(1, dx / 90)); nope.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+  });
+  const up = () => {
+    if (!down) return; down = false;
+    if (Math.abs(dx) > 100) return fling(el, c, dx > 0 ? "right" : "left");
+    el.classList.add("anim"); el.style.transform = ""; like.style.opacity = 0; nope.style.opacity = 0; dx = dy = 0;
+  };
+  el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+  el.addEventListener("click", e => { if (moved) e.stopPropagation(); }, true);
+}
+
+async function fling(el, c, dir) {
+  el.classList.add("anim");
+  el.style.transform = `translate(${dir === "right" ? 140 : -140}vw, -40px) rotate(${dir === "right" ? 30 : -30}deg)`;
+  el.querySelector(`.stamp.${dir === "right" ? "like" : "nope"}`).style.opacity = 1;
+  if (navigator.vibrate) navigator.vibrate(12);
+  history.push(i); swipes[c.building_id] = dir; i++;
+  fetch(`/api/vibe/${deckId}/swipe`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ building_id: c.building_id, dir }) });
+  setTimeout(render, 260);
+}
+
+function top() { return deckEl.lastElementChild; }
+document.getElementById("yes").onclick = () => { const el = top(); if (el && i < cards.length) fling(el, cards[i], "right"); };
+document.getElementById("no").onclick = () => { const el = top(); if (el && i < cards.length) fling(el, cards[i], "left"); };
+document.getElementById("undo").onclick = () => { if (history.length) { i = history.pop(); delete swipes[cards[i].building_id]; render(); } };
+addEventListener("keydown", e => { if (e.key === "ArrowRight") document.getElementById("yes").click(); if (e.key === "ArrowLeft") document.getElementById("no").click(); });
+
+function finish() {
+  document.getElementById("actions").style.display = "none"; document.getElementById("hint").style.display = "none";
+  const liked = cards.filter(c => swipes[c.building_id] === "right");
+  const done = document.getElementById("done"); done.classList.add("show");
+  done.innerHTML = `<div class="big">${liked.length ? "💚" : "🤷"}</div><h2>Vibe check done</h2>
+    <p>${liked.length ? `Homie's going after ${liked.length === 1 ? "this one" : "these " + liked.length}. Back to the chat, updates land there.` : "You passed on everything. Homie will keep the two cheapest in play and look wider."}</p>
+    <ul>${liked.map(c => `<li><span>${esc(c.name)}</span><b>${c.price ? "$" + Number(c.price).toLocaleString() : "ask"}</b></li>`).join("")}</ul>`;
+}
+load();
+</script>
+</body>
+</html>

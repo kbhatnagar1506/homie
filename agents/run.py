@@ -9,11 +9,11 @@ plus the Relay bridge when RELAY_TOKEN_HOMIE is set in .env.
 from uagents import Bureau
 
 from agents.homie_agent import homie
-from agents.specialists import caller, later, negotiator, scout, memory, paperwork, pictures, policy, repairs
+from agents.specialists import caller, later, negotiator, scout, vibecheck, memory, paperwork, pictures, policy, repairs
 from homie.config import env
 
 if __name__ == "__main__":
-    agents = [homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, later, scout]
+    agents = [homie, caller, negotiator, paperwork, repairs, policy, pictures, memory, later, scout, vibecheck]
     if env("RELAY_TOKEN_HOMIE"):
         from agents.relay_bridge import bridge
 

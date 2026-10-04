@@ -112,7 +112,7 @@ def _ulaw_to_pcm(data: bytes) -> bytes:
 
 
 async def stream(websocket: WebSocket, key: str, on_line) -> None:
-    if env("ELEVENLABS_PHONE_AGENT_ID") and env("ELEVENLABS_API_KEY") and env("PHONE_VOICE", "elevenlabs") == "elevenlabs":
+    if (env("ELEVENLABS_PHONE_AGENT_ID") or env("ELEVENLABS_BACKUP_PHONE_AGENT_ID")) and env("PHONE_VOICE", "elevenlabs") == "elevenlabs":
         return await stream_elevenlabs(websocket, key, on_line)
     return await stream_pipecat(websocket, key, on_line)
 
@@ -139,10 +139,25 @@ async def stream_elevenlabs(websocket: WebSocket, key: str, on_line) -> None:
         if msg.get("event") == "start":
             stream_sid, call_sid = msg["start"]["streamSid"], msg["start"].get("callSid", "")
             break
-    api_key = env("ELEVENLABS_API_KEY")
-    async with httpx.AsyncClient(timeout=10) as client:
-        signed = (await client.get("https://api.elevenlabs.io/v1/convai/conversation/get-signed-url",
-                                   params={"agent_id": env("ELEVENLABS_PHONE_AGENT_ID")}, headers={"xi-api-key": api_key})).json()["signed_url"]
+    from homie import eleven
+
+    signed = None
+    first_pick = await eleven.best(need_phone_agent=True)
+    for acct in [first_pick] + [a for a in eleven.accounts() if a is not first_pick and a["phone_agent"]]:
+        if not acct:
+            continue
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get("https://api.elevenlabs.io/v1/convai/conversation/get-signed-url",
+                                 params={"agent_id": acct["phone_agent"]}, headers={"xi-api-key": acct["key"]})
+        if r.status_code == 200:
+            signed = r.json()["signed_url"]
+            break
+        log.warning("ElevenLabs account refused the call (%s), trying the backup", r.status_code)
+    if not signed:
+        call["live"] = False
+        finish(key, answered=False, status="voice unavailable")
+        await websocket.close()
+        return
     lines: list[str] = []
     call["live"] = True
     first = call.get("first_message") or "Hi, this is Homie, an AI assistant calling on behalf of a student. Do you have a quick minute?"

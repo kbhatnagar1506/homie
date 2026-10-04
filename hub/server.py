@@ -81,6 +81,52 @@ def dashboard():
     return FileResponse(STATIC / "dashboard.html")
 
 
+# ---------- vibe check (swipe cards) ----------
+
+vibe_decks: dict[str, dict] = {}
+
+
+@app.get("/vibe/{deck_id}")
+def vibe_page(deck_id: str):
+    return FileResponse(STATIC / "vibe.html")
+
+
+@app.post("/api/vibe/decks")
+async def new_deck(body: dict):
+    vibe_decks[body["deck_id"]] = {"deck_id": body["deck_id"], "user": body.get("user", ""), "cards": body.get("cards", []),
+                                   "swipes": {}, "created": time.time()}
+    log(f"✨ Vibe check ready: {len(body.get('cards', []))} cards")
+    await publish()
+    return {"ok": True}
+
+
+@app.get("/api/vibe/{deck_id}")
+def get_deck(deck_id: str):
+    deck = vibe_decks.get(deck_id)
+    if not deck:
+        raise HTTPException(404, "no such deck")
+    return {**deck, "done": len(deck["swipes"]) >= len(deck["cards"]) or deck.get("finished", False)}
+
+
+@app.post("/api/vibe/{deck_id}/swipe")
+async def swipe(deck_id: str, body: dict):
+    deck = vibe_decks.get(deck_id)
+    if not deck:
+        raise HTTPException(404, "no such deck")
+    bid, direction = body.get("building_id"), body.get("dir")
+    card = next((c for c in deck["cards"] if c["building_id"] == bid), None)
+    if card is None or direction not in ("left", "right"):
+        raise HTTPException(400, "bad swipe")
+    deck["swipes"][bid] = direction
+    if body.get("finish"):
+        deck["finished"] = True
+    log(f"{'💚 Liked' if direction == 'right' else '✖ Passed'} {card.get('name')}")
+    state["agentlog"].append({"t": time.strftime("%H:%M:%S"), "user": deck.get("user", ""), "from": "you", "to": "homie-vibecheck",
+                              "kind": "Swipe", "summary": f"{'right' if direction == 'right' else 'left'} on {card.get('name')}", "ts": time.time()})
+    await publish()
+    return {"ok": True, "done": len(deck["swipes"]) >= len(deck["cards"])}
+
+
 @app.get("/flow")
 def flow():
     return FileResponse(STATIC / "flow.html")

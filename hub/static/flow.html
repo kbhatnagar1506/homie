@@ -128,6 +128,7 @@
 const AGENTS = [
   ["homie-caller", "Calls", "calls", "phones offices"],
   ["homie-scout", "Scout", "scout", "reads websites"],
+  ["homie-vibecheck", "Vibecheck", "vibecheck", "your swipes"],
   ["homie-pictures", "Pics", "pics", "screenshots"],
   ["homie-negotiator", "Negotiator", "negotiator", "plays offers"],
   ["homie-paperwork", "Papers", "papers", "no-SSN docs"],
@@ -188,11 +189,12 @@ function render() {
   document.getElementById("request").textContent = reqText;
 
   node("you", 40, 380, "agent", "/avatars/memory.png", "You · Relay", reqText ? "request in" : "waiting", "");
+  wire("you", "homie-vibecheck", busy.has("homie-vibecheck") ? "active" : "");
   const homie = node("homie", 250, 372, "core" + (busy.has("homie") ? " active" : ""), "/avatars/homie.png", "Homie", "Jev routes every decision", "LEAD");
   wire("you", "homie", busy.has("homie") ? "active" : "");
 
   AGENTS.forEach(([id, name, img, sub], i) => {
-    const y = 130 + i * 76;
+    const y = 120 + i * 70;
     node(id, 560, y, "agent" + (busy.has(id) ? " active" : ""), `/avatars/${img}.png`, name, sub, busy.has(id) ? "WORKING" : "");
     wire("homie", id, active.has("homie>" + id) ? "active" : "");
   });
@@ -226,7 +228,7 @@ addEventListener("resize", fit);
 
 // ---------- live console ----------
 const NAMES = { "homie": "Homie", "homie-caller": "Calls", "homie-scout": "Scout", "homie-pictures": "Pics", "homie-negotiator": "Negotiator",
-  "homie-paperwork": "Papers", "homie-policy": "Policy", "homie-memory": "Memory", "homie-later": "Later", "homie-repairs": "Fix", "jev": "Homie" };
+  "homie-paperwork": "Papers", "homie-policy": "Policy", "homie-memory": "Memory", "homie-later": "Later", "homie-repairs": "Fix", "homie-vibecheck": "Vibecheck", "you": "You", "jev": "Homie" };
 let feedKey = "";
 function renderFeed() {
   const ev = [

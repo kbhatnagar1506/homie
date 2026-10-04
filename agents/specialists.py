@@ -5,6 +5,7 @@ with messages, and Negotiator and Repairs hire the Caller themselves.
 """
 
 import asyncio
+import json
 import uuid
 from datetime import datetime
 
@@ -42,6 +43,10 @@ from homie.models import (
     PicturesResult,
     RepairRequest,
     RepairResult,
+    VibeDeck,
+    VibeRequest,
+    VibeResult,
+    VibeWait,
 )
 
 
@@ -56,7 +61,7 @@ async def _log_activity(role: str, text: str, images: list[str]) -> None:
 events.subscribe(_log_activity)
 
 
-AVATARS = {"scout": "scout", "later": "later", "memory": "memory", "caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
+AVATARS = {"vibecheck": "vibecheck", "scout": "scout", "later": "later", "memory": "memory", "caller": "calls", "negotiator": "negotiator", "paperwork": "papers", "repairs": "fix", "policy": "policy", "pictures": "pics"}
 
 
 def specialist(role: str, description: str, concurrent: bool = True) -> Agent:
@@ -73,6 +78,7 @@ paperwork = specialist("paperwork", "No-SSN rental paperwork: documents, applica
 repairs = specialist("repairs", "Repairs: sees the problem on a video call, files the ticket with a photo, and chases the office until it is booked. Part of Homie.")
 policy = specialist("policy", "Plain-English lease and tenant-rights help for Georgia and US renters. Part of Homie.")
 scout = specialist("scout", "Reads a building's whole website: floor plans, live prices, specials, fees, pet and parking policy, how to apply, no-SSN rules. Part of Homie.")
+vibecheck = specialist("vibecheck", "Vibe check: turns the buildings Scout found into swipe cards (left/right) and learns the renter's taste. Part of Homie.")
 later = specialist("later", "The waiting agent: holds future tasks (get offers Monday, call when the office opens, rent reminders) and runs them on time. Part of Homie.")
 memory = specialist("memory", "Long-term memory of everything a renter has told Homie, stored in Mapi. Ask it anything about them. Part of Homie.")
 pictures = specialist("pictures", "Screenshots any apartment listing in a real browser and reads live prices off building websites. Part of Homie.")
@@ -449,3 +455,61 @@ def _int(value) -> int | None:
         return int(str(value).replace("$", "").replace(",", "")) if value not in (None, "") else None
     except ValueError:
         return None
+
+
+# ---------- Vibecheck: swipe cards ----------
+
+VIBE_PROMPT = """You write swipe cards for apartment buildings, for an international student choosing from abroad.
+For each building return a short, honest vibe line (max 14 words, no hype words like "luxury", no em dashes) and 3 short tags
+(neighborhood feel, standout amenity or perk, who it suits). Use only the facts given.
+Return JSON {"cards": [{"building_id": str, "vibe": str, "tags": [str, str, str]}]}."""
+
+
+@vibecheck.on_message(VibeRequest, replies=VibeDeck)
+async def on_vibe(ctx: Context, sender: str, req: VibeRequest):
+    CURRENT_USER.set(req.user)
+    facts = []
+    for bid in req.building_ids:
+        b, site = BUILDINGS.get(bid, {}), (req.site or {}).get(bid, {})
+        facts.append({"building_id": bid, "name": b.get("name"), "address": b.get("address"), "rating": b.get("rating"),
+                      "price": site.get("price"), "special": site.get("special"), "amenities": site.get("amenities"), "notes": site.get("notes")})
+    vibes = {c["building_id"]: c for c in ((await complete_json(VIBE_PROMPT, json.dumps(facts)) or {}).get("cards") or []) if c.get("building_id")}
+    cards = []
+    for f in facts:
+        site = (req.site or {}).get(f["building_id"], {})
+        v = vibes.get(f["building_id"], {})
+        cards.append({**f, "per_bed": site.get("per_bed"), "shots": site.get("shots") or [], "vibe": v.get("vibe") or "",
+                      "tags": (v.get("tags") or [])[:3], "website": BUILDINGS.get(f["building_id"], {}).get("website"),
+                      "beds": req.beds, "over_budget": bool(req.budget and f.get("price") and f["price"] > req.budget)})
+    deck_id = uuid.uuid4().hex[:10]
+    await hub.post("/api/vibe/decks", {"deck_id": deck_id, "user": req.user, "cards": cards})
+    await hub.log_event(f"✨ Vibecheck built {len(cards)} swipe cards")
+    await ctx.send(sender, VibeDeck(request_id=req.request_id, deck_id=deck_id, url=f"{PUBLIC_URL}/vibe/{deck_id}", cards=len(cards)))
+
+
+TASTE_PROMPT = """A renter swiped on apartment buildings. In one friendly sentence (max 25 words, no em dashes), say what their taste seems to be,
+based on what they liked versus passed. Return JSON {"taste": str}."""
+
+
+@vibecheck.on_message(VibeWait, replies=VibeResult)
+async def on_vibe_wait(ctx: Context, sender: str, req: VibeWait):
+    CURRENT_USER.set(req.user)
+    deck, end = {}, asyncio.get_event_loop().time() + req.wait_seconds
+    while asyncio.get_event_loop().time() < end:
+        deck = await hub.get(f"/api/vibe/{req.deck_id}") or {}
+        if deck.get("done"):
+            break
+        await asyncio.sleep(2)
+    swipes = deck.get("swipes") or {}
+    liked = [b for b, d in swipes.items() if d == "right"]
+    passed = [b for b, d in swipes.items() if d == "left"]
+    taste = ""
+    if liked or passed:
+        cards = {c["building_id"]: c for c in deck.get("cards") or []}
+        brief = lambda ids: [{k: cards[i].get(k) for k in ("name", "price", "vibe", "tags", "special")} for i in ids if i in cards]  # noqa: E731
+        taste = ((await complete_json(TASTE_PROMPT, json.dumps({"liked": brief(liked), "passed": brief(passed)}))) or {}).get("taste", "")
+        if taste:
+            await mapi.remember(f"Vibe check: {taste} Liked {', '.join(cards[i]['name'] for i in liked if i in cards) or 'none'}.",
+                                tags=["profile", "vibecheck"], source="vibecheck")
+    await hub.log_event(f"✨ Vibe check {'done' if deck.get('done') else 'timed out'}: {len(liked)} liked, {len(passed)} passed")
+    await ctx.send(sender, VibeResult(request_id=req.request_id, deck_id=req.deck_id, liked=liked, passed=passed, taste=taste, done=bool(deck.get("done"))))

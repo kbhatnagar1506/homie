@@ -163,3 +163,39 @@ class ScoutResult(Model):
     facts: dict = {}
     shots: list[str] = []
     pages: int = 0
+
+
+class VibeRequest(Model):
+    """Build a swipe deck from what Scout found."""
+    request_id: str = ""
+    user: str = ""
+    building_ids: list[str] = []
+    beds: int | None = None
+    budget: int | None = None
+    site: dict = {}  # building_id -> {price, per_bed, special, shots, hours}
+
+
+class VibeDeck(Model):
+    request_id: str = ""
+    user: str = ""
+    deck_id: str = ""
+    url: str = ""
+    cards: int = 0
+
+
+class VibeWait(Model):
+    """Wait for the renter to finish swiping."""
+    request_id: str = ""
+    user: str = ""
+    deck_id: str = ""
+    wait_seconds: int = 900
+
+
+class VibeResult(Model):
+    request_id: str = ""
+    user: str = ""
+    deck_id: str = ""
+    liked: list[str] = []
+    passed: list[str] = []
+    taste: str = ""
+    done: bool = False

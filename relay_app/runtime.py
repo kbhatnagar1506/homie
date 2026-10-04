@@ -205,6 +205,13 @@ class RelayTeam:
             if result != "sent":
                 await self.send(role, chat_id, "Payments aren't switched on in Relay yet, so this one's on the house. 🏡")
             return
+        vibe = re.search(r"https?://\S+/vibe/[a-f0-9]+", text)
+        if vibe:
+            # The swipe link goes out as a tappable card, never rewritten.
+            await self.send(role, chat_id, text.replace(vibe.group(0), "").strip(),
+                            extra=[{"type": "rich_card", "title": "✨ Vibe check", "description": "Swipe right on places you'd live, left on the rest.",
+                                    "suggestions": [{"type": "open_url", "label": "Start swiping", "url": vibe.group(0), "application": "webview"}]}])
+            return
         if text.rstrip().endswith("Approve?"):
             self.awaiting_approval = True
             await self.send(role, chat_id, await self.in_voice(role, text), buttons=["Approve", "Keep looking"])
