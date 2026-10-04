@@ -43,7 +43,7 @@ from homie.config import HUB_URL, VERTEX_LOCATION, env
 from homie.lipsync import estimate_ms, timeline
 
 log = logging.getLogger("homie.avatar")
-W, H, FPS = 540, 960, 15
+W, H, FPS = 540, 960, 24
 
 
 class AvatarRenderer:
@@ -74,7 +74,7 @@ class AvatarRenderer:
                 pass  # page closed at the end of the call
 
         cdp.on("Page.screencastFrame", lambda e: asyncio.ensure_future(on_frame(e)))
-        await cdp.send("Page.startScreencast", {"format": "jpeg", "quality": 80, "maxWidth": W, "maxHeight": H, "everyNthFrame": 1})
+        await cdp.send("Page.startScreencast", {"format": "jpeg", "quality": 88, "maxWidth": W, "maxHeight": H, "everyNthFrame": 1})
 
     async def js(self, code: str, *args) -> None:
         if self.page:
@@ -94,6 +94,11 @@ class AvatarRenderer:
 
     async def ticket(self, title: str, text: str, status: str = "") -> None:
         await self.js("([a, b, c]) => homie.ticket(a, b, c)", [title, text, status])
+
+    async def reset(self) -> None:
+        """Fresh face for the next call without relaunching the browser."""
+        await self.page.reload(wait_until="networkidle")
+        await self.page.wait_for_function("window.homieReady === true", timeout=20000)
 
     async def close(self) -> None:
         try:
@@ -225,15 +230,30 @@ FIX_PROMPT = (
 )
 
 
+_warm: dict[str, AvatarRenderer] = {}
+
+
+async def warm(role: str) -> AvatarRenderer:
+    """Keep a rendered avatar ready per role, so answering a call is instant."""
+    r = _warm.get(role)
+    if r is None or r.page is None:
+        r = AvatarRenderer(role)
+        await r.start()
+        _warm[role] = r
+    return r
+
+
 async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> None:
     """Answer a Relay video call as the live 3D avatar. on_request(title, details, urgency) files the ticket."""
     from homie import mapi
 
-    renderer = AvatarRenderer(role)
     camera = CameraTap()
     seen = {"photo": None, "description": ""}
-    await renderer.start()
-    known = "; ".join(m["content"] for m in await mapi.recall("renter apartment building unit preferences", limit=5))
+    renderer, recalled = await asyncio.gather(warm(role), asyncio.wait_for(
+        mapi.recall("renter name apartment building unit preferences", limit=5), 1.5), return_exceptions=True)
+    if isinstance(renderer, Exception):
+        raise renderer
+    known = "; ".join(m["content"] for m in recalled) if isinstance(recalled, list) else ""
     instructions = FIX_PROMPT.format(memory=f"What you remember about them: {known}" if known else "")
 
     transport = RelayTransport(api_key=token, call_id=call_id, base_url=env("RELAY_BASE_URL", "https://api.relayapp.im"),
@@ -293,7 +313,8 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
 
         stt = ElevenLabsRealtimeSTTService(api_key=env("ELEVENLABS_API_KEY"))
         llm = GoogleVertexLLMService(credentials_path=creds, project_id=project, location=VERTEX_LOCATION,
-                                     model="gemini-2.5-flash", system_instruction=instructions)
+                                     settings=GoogleVertexLLMService.Settings(model=env("CALL_MODEL", "gemini-2.5-flash-lite"),
+                                                                              system_instruction=instructions))
         tts = ElevenLabsTTSService(api_key=env("ELEVENLABS_API_KEY"), voice_id=env("ELEVENLABS_VOICE_ID", "SOYHLrjzK2X1ezoPC6cr"),
                                    model="eleven_flash_v2_5")
         llm.register_function("file_maintenance_request", file_request)
@@ -314,10 +335,18 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
 
     worker = PipelineWorker(Pipeline(stages), params=rates, cancel_on_idle_timeout=False)
 
-    @transport.event_handler("on_first_participant_joined")
-    async def _joined(transport, participant_id):
-        context.add_message({"role": "user", "content": "The renter just joined the video call. Greet them warmly by name if you know it and ask what's broken."})
+    greeted = {"done": False}
+
+    async def greet(*_):
+        """They called us, so speak the moment media connects instead of waiting for their video."""
+        if greeted["done"]:
+            return
+        greeted["done"] = True
+        context.add_message({"role": "user", "content": "The renter just called you on video. Greet them warmly by name if you know it, in one short sentence, and ask what's broken."})
         await worker.queue_frame(LLMRunFrame())
+
+    transport.event_handler("on_connected")(greet)
+    transport.event_handler("on_first_participant_joined")(greet)
 
     @transport.event_handler("on_participant_left")
     async def _left(transport, participant_id, reason):
@@ -331,5 +360,9 @@ async def run_avatar_call(token: str, call_id: str, role: str, on_request) -> No
     except asyncio.TimeoutError:
         await worker.cancel()
     finally:
-        await renderer.close()
+        try:
+            await renderer.reset()
+        except Exception:
+            await renderer.close()
+            _warm.pop(role, None)
         log.info("avatar call %s ended after %.0fs", call_id, time.time() - started)

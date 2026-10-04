@@ -45,6 +45,7 @@ class RelayTeam:
         self.recent: list[str] = []  # last few team-chat lines, so teammates react to each other
         self._handoffs: dict[tuple[str, str], list[str]] = {}
         self.calls: set[asyncio.Task] = set()
+        self.active_calls: set[str] = set()
 
     # ---------- setup ----------
 
@@ -79,6 +80,7 @@ class RelayTeam:
                 log.warning("Relay setup step %s failed: %s", step.__name__, e)
         events.subscribe(self.on_team_post)
         events.subscribe_handoffs(self.on_handoff)
+        asyncio.ensure_future(self._prewarm())
         await asyncio.gather(*(self._listen(role) for role in self.relays))
 
     async def _hello(self, role: str) -> None:
@@ -241,7 +243,9 @@ class RelayTeam:
             elif event["event_type"] == "contact.added":
                 await self.ensure_team_chat()
             elif event["event_type"] == "call.created" and data["call"].get("status") == "ringing" \
-                    and (data["call"].get("from") or {}).get("kind") != "agent" and role in ("fix", "homie"):
+                    and (data["call"].get("from") or {}).get("kind") != "agent" and role in ("fix", "homie") \
+                    and data["call"]["id"] not in self.active_calls:
+                self.active_calls.add(data["call"]["id"])  # Relay can deliver the same ring twice: answer once
                 task = asyncio.ensure_future(self._video_call(role, data["call"]["id"], data["call"].get("chat_id")))
                 self.calls.add(task)
                 task.add_done_callback(self.calls.discard)
@@ -287,6 +291,16 @@ class RelayTeam:
         caption = await self.in_voice("pics", f"Screenshots of {', '.join(label for _, label in targets[:3])}." if images else "That page wouldn't load for me. Try another link?")
         await self.send("pics", chat_id, caption, extra=[{"type": "media", "url": u} for u in images])
 
+    async def _prewarm(self) -> None:
+        from homie.avatar_call import warm
+
+        for role in ("fix", "homie"):
+            try:
+                await warm(role)
+                log.info("avatar for %s is warm", role)
+            except Exception as e:
+                log.warning("couldn't pre-warm %s avatar: %s", role, e)
+
     async def _video_call(self, role: str, call_id: str, chat_id: str | None) -> None:
         """Answer with the live 3D avatar; a maintenance request filed on the call goes to the Repairs agent."""
         from homie.avatar_call import run_avatar_call
@@ -300,6 +314,8 @@ class RelayTeam:
             await run_avatar_call(env(TEAM[role].token_env), call_id, role, on_request)
         except Exception as e:
             log.exception("video call failed: %s", e)
+        finally:
+            self.active_calls.discard(call_id)
 
     async def _memory(self, chat_id: str, text: str) -> None:
         from homie import mapi
